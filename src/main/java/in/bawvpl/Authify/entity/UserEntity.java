@@ -7,94 +7,93 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "users")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class UserEntity {
 
-    // ✅ PRIMARY KEY
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // ✅ BUSINESS ID
-    @Column(unique = true, nullable = false)
+    // ================= UNIQUE USER ID =================
+    @Column(name = "user_id", unique = true, nullable = false, updatable = false)
     private String userId;
+
+    // ================= BASIC DETAILS =================
+
+    @Column(name = "entity_type")
+    private String entityType; // INDIVIDUAL / ADMIN
+
+    @Column(name = "entity_name")
+    private String entityName;
+
+    @Column(name = "contact_person")
+    private String contactPerson;
 
     @Column(unique = true, nullable = false)
     private String email;
 
+    @Column(name = "phone_number")
+    private String phoneNumber;
+
     private String password;
 
-    // BASIC
-    private String entityType;
-    private String entityName;
-    private String contactPerson;
-    private String entityPic;
-
-    private String mobile;
-    private String address;
-
-    // VERIFICATION
-    private Boolean emailVerified = false;
-
-    // PASSWORD TRACKING
-    private LocalDateTime passDate;
-    private String passStatus;
-
-    // KYC
-    private String idType;
-    private String idProof;
-    private String idDoc;
-
-    // REFERRAL
-    private Long referredBy;
-    private String referralLink;
-
-    // ADMIN
-    private String userStatus;
+    @Column(name = "admin_role")
     private String adminRole;
 
-    // TERMS
-    @Column(length = 2000)
-    private String tncText;
+    @Builder.Default
+    @Column(name = "user_status")
+    private String userStatus = "ACTIVE";
 
-    // TIME
-    private LocalDateTime creationTime;
-    private LocalDateTime lastUpdate;
+    @Builder.Default
+    @Column(name = "email_verified")
+    private Boolean emailVerified = false;
 
-    // OTP
-    private String verifyOtp;
-    private Long verifyOtpExpireAt;
+    private String address;
 
-    private String resetOtp;
-    private Long resetOtpExpireAt;
+    // ================= REFERRAL =================
 
-    private String registerOtp;
-    private Long registerOtpExpireAt;
+    @Column(name = "referral_code")
+    private String referralCode;
 
-    // RELATION
-    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL)
-    private KycEntity kyc;
+    // ================= PROFILE IMAGE ================= (Optional but recommended)
+    @Column(name = "photo_url")
+    private String photoUrl;
 
-    // AUTO TIMESTAMP
+    // ================= TIMESTAMPS =================
+
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
+
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    // ================= AUTO TIMESTAMPS =================
+
     @PrePersist
-    public void onCreate() {
-        this.creationTime = LocalDateTime.now();
-        this.lastUpdate = LocalDateTime.now();
-        this.passDate = LocalDateTime.now();
-        this.passStatus = "Active";
-        this.userStatus = "Active";
-        this.emailVerified = false;
+    public void prePersist() {
 
-        if (this.referredBy == null) {
-            this.referredBy = 1000000L;
+        if (this.createdAt == null) {
+            this.createdAt = LocalDateTime.now();
+        }
+
+        this.updatedAt = LocalDateTime.now();
+
+        // Safety defaults
+        if (this.userStatus == null) {
+            this.userStatus = "ACTIVE";
+        }
+
+        if (this.emailVerified == null) {
+            this.emailVerified = false;
         }
     }
 
     @PreUpdate
-    public void onUpdate() {
-        this.lastUpdate = LocalDateTime.now();
+    public void preUpdate() {
+        this.updatedAt = LocalDateTime.now();
     }
 }

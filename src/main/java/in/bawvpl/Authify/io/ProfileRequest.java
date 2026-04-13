@@ -1,15 +1,25 @@
 package in.bawvpl.Authify.io;
 
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
 @Data
-@NoArgsConstructor
 public class ProfileRequest {
+
     private String name;
+
     private String email;
-    private String password;
+
     private String phoneNumber;
-    private String aadhaarNumber;
-    private String panNumber;// optional but accepted
+
+    private String password;
+
+    // ✅ NEW FIELDS (YOU WERE MISSING THESE)
+
+    private String address;
+
+    private String referralCode;
+
+    private String documentType;      // AADHAAR / PAN
+
+    private String documentNumber;    // Aadhaar / PAN number
 }

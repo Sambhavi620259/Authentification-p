@@ -6,6 +6,7 @@ import in.bawvpl.Authify.entity.UserEntity;
 import in.bawvpl.Authify.repository.AppRepository;
 import in.bawvpl.Authify.repository.UserApplicationRepository;
 import in.bawvpl.Authify.repository.UserRepository;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -28,7 +29,6 @@ public class UserApplicationService {
         AppEntity app = appRepository.findById(appId)
                 .orElseThrow(() -> new RuntimeException("App not found"));
 
-        // ✅ FIXED METHOD NAME
         Optional<UserApplicationEntity> existing =
                 userAppRepository.findByUser_IdAndApp_AppId(userId, appId);
 
@@ -36,11 +36,10 @@ public class UserApplicationService {
             throw new RuntimeException("User already applied for this app");
         }
 
-        // ✅ FIXED FIELD NAME (IMPORTANT)
         UserApplicationEntity entity = UserApplicationEntity.builder()
                 .user(user)
                 .app(app)
-                .subscriptionStatus("APPLIED") // 🔥 FIXED HERE
+                .subscriptionStatus("APPLIED") // correct
                 .build();
 
         return userAppRepository.save(entity);
@@ -48,7 +47,6 @@ public class UserApplicationService {
 
     // ================= GET USER APP =================
     public Optional<UserApplicationEntity> getUserApp(Long userId, Long appId) {
-
         return userAppRepository.findByUser_IdAndApp_AppId(userId, appId);
     }
 }

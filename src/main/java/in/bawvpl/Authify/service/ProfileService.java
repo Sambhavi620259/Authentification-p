@@ -6,25 +6,26 @@ import in.bawvpl.Authify.io.ProfileResponse;
 
 public interface ProfileService {
 
+    // ================= PROFILE =================
     ProfileResponse createProfile(ProfileRequest request);
-
-    String verifyOtp(String email, String otp); // ✅ FIXED
 
     ProfileResponse getProfile(String email);
 
-    void sendResetOtp(String email);
-
-    void resetPassword(String email, String otp, String newPassword);
-
-    void sendVerificationOtp(String email);
-
-    void verifyKyc(String email);
-
     String getLoggedInUserId(String email);
 
+    // ================= USER =================
     boolean existsByEmail(String email);
 
     UserEntity findByEmail(String email);
 
     UserEntity save(UserEntity userEntity);
+
+    // ================= OTP =================
+    String verifyOtp(String email, String otp);
+
+    void sendVerificationOtp(String email);
+
+    void sendResetOtp(String email);
+
+    void resetPassword(String email, String otp, String newPassword);
 }

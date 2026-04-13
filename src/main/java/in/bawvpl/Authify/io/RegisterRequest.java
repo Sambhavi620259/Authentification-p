@@ -6,12 +6,13 @@ import lombok.Data;
 @Data
 public class RegisterRequest {
 
-    // ✅ TABLE-1 REQUIRED
+    // ================= BASIC =================
+
     @NotBlank(message = "Entity type is required")
-    private String entityType; // Individual / Organization
+    private String entityType; // INDIVIDUAL / ADMIN
 
     @NotBlank(message = "Name is required")
-    private String name; // Entity_Name
+    private String name;
 
     @Email(message = "Invalid email")
     @NotBlank(message = "Email is required")
@@ -25,11 +26,44 @@ public class RegisterRequest {
     @NotBlank(message = "Mobile number is required")
     private String phoneNumber;
 
-    // ================= OPTIONAL (KYC SUPPORT) =================
+    // ================= NEW FIELDS =================
 
-    @Pattern(regexp = "\\d{12}", message = "Invalid Aadhaar")
-    private String aadhaarNumber;
+    @NotBlank(message = "Address is required")
+    private String address;
 
-    @Pattern(regexp = "[A-Z]{5}[0-9]{4}[A-Z]{1}", message = "Invalid PAN")
-    private String panNumber;
+    private String referralCode; // optional
+
+    // ================= KYC =================
+
+    @NotBlank(message = "Document type is required")
+    private String documentType; // AADHAAR / PAN / DL / VOTER_ID
+
+    @NotBlank(message = "Document number is required")
+    private String documentNumber;
+
+    // ================= CUSTOM VALIDATION =================
+
+    @AssertTrue(message = "Invalid document number format")
+    public boolean isDocumentValid() {
+
+        if (documentType == null || documentNumber == null) {
+            return false;
+        }
+
+        switch (documentType.toUpperCase()) {
+
+            case "AADHAAR":
+                return documentNumber.matches("\\d{12}");
+
+            case "PAN":
+                return documentNumber.matches("[A-Z]{5}[0-9]{4}[A-Z]");
+
+            case "DL":
+            case "VOTER_ID":
+                return true; // optional validation
+
+            default:
+                return false;
+        }
+    }
 }

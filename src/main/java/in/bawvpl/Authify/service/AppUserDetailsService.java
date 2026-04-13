@@ -1,14 +1,16 @@
 package in.bawvpl.Authify.service;
 
 import in.bawvpl.Authify.entity.UserEntity;
+import in.bawvpl.Authify.entity.KycEntity;
 import in.bawvpl.Authify.io.AuthResponse;
 import in.bawvpl.Authify.io.ProfileResponse;
-import in.bawvpl.Authify.io.RegisterRequest;
 import in.bawvpl.Authify.repository.UserRepository;
+import in.bawvpl.Authify.repository.KycRepository;
 import in.bawvpl.Authify.util.JwtUtil;
-import jakarta.validation.Valid;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.*;
@@ -17,8 +19,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -31,150 +33,157 @@ public class AppUserDetailsService implements UserDetailsService {
     private final EmailService emailService;
     private final OtpService otpService;
     private final JwtUtil jwtUtil;
+    private final KycRepository kycRepository;
 
-    // ===============================
-    // Spring Security Authentication
-    // ===============================
+    // ================= SECURITY LOGIN =================
     @Override
     public UserDetails loadUserByUsername(String username)
             throws UsernameNotFoundException {
 
         UserEntity user = userRepository.findByEmail(username)
                 .orElseThrow(() ->
-                        new UsernameNotFoundException("User not found: " + username));
-
-        String role = user.getAdminRole();
-        if (role == null || role.isBlank()) {
-            role = "ROLE_USER";
-        }
+                        new UsernameNotFoundException("User not found"));
 
         return User.builder()
                 .username(user.getEmail())
                 .password(user.getPassword())
-                .authorities(List.of(new SimpleGrantedAuthority(role)))
+                .authorities(List.of(
+                        new SimpleGrantedAuthority(
+                                user.getAdminRole() != null
+                                        ? user.getAdminRole()
+                                        : "ROLE_USER"
+                        )
+                ))
                 .build();
     }
 
-    // ===============================
-    // REGISTER (TABLE-1 BASED)
-    // ===============================
+    // ================= REGISTER =================
     @Transactional
-    public ProfileResponse registerUser(@Valid RegisterRequest req) {
+    public UserEntity registerUser(
+            String entityType,
+            String name,
+            String email,
+            String phoneNumber,
+            String password,
+            String address) {
 
-        if (userRepository.existsByEmail(req.getEmail())) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT, "Email already registered");
+        if (userRepository.existsByEmail(email)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already registered");
         }
 
-        if (userRepository.existsByMobile(req.getPhoneNumber())) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT, "Mobile already registered");
+        if (userRepository.existsByPhoneNumber(phoneNumber)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Phone already registered");
         }
 
         UserEntity user = UserEntity.builder()
                 .userId(UUID.randomUUID().toString())
-
-                // ✅ TABLE-1 FIELDS
-                .entityType(req.getEntityType())
-                .entityName(req.getName())
-                .contactPerson(req.getName())
-                .email(req.getEmail())
-                .mobile(req.getPhoneNumber())
-                .password(passwordEncoder.encode(req.getPassword()))
-
-                // ✅ DEFAULT VALUES
+                .entityType(entityType)
+                .entityName(name)
+                .contactPerson(name)
+                .email(email)
+                .phoneNumber(phoneNumber)
+                .password(passwordEncoder.encode(password))
                 .adminRole("ROLE_USER")
-                .userStatus("Active")
+                .userStatus("ACTIVE")
                 .emailVerified(false)
-                .passDate(LocalDateTime.now())
-                .passStatus("Active")
-
-                // ✅ REFERRAL DEFAULT
-                .referredBy(1000000L)
-
+                .address(address)
                 .build();
 
         userRepository.save(user);
 
-        // 🔥 OPTIONAL: SEND EMAIL OTP
         try {
             String otp = otpService.generateRegisterOtp(user);
             emailService.sendVerificationOtpEmail(user.getEmail(), otp);
-            log.info("REGISTER OTP SENT: {}", otp);
         } catch (Exception ex) {
-            log.error("OTP email failed", ex);
+            log.error("Register OTP email failed", ex);
         }
 
-        return mapToProfile(user);
+        return user;
     }
 
-    // ===============================
-    // LOGIN STEP 1 → PASSWORD + OTP
-    // ===============================
-    public boolean loginAndSendOtp(String email, String password) {
+    // ================= SAVE USER =================
+    public UserEntity save(UserEntity user) {
+        return userRepository.save(user);
+    }
+
+    // ================= LOGIN STEP 1 =================
+    public void loginAndSendOtp(String email, String password) {
 
         UserEntity user = userRepository.findByEmail(email)
                 .orElseThrow(() ->
-                        new ResponseStatusException(
-                                HttpStatus.NOT_FOUND, "User not found"));
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
         if (!passwordEncoder.matches(password, user.getPassword())) {
-            throw new ResponseStatusException(
-                    HttpStatus.UNAUTHORIZED, "Invalid email or password");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
         }
 
-        if (!"Active".equalsIgnoreCase(user.getUserStatus())) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN, "User account is not active");
-        }
-
-        // 🔥 GENERATE OTP
         String otp = otpService.generateLoginOtp(user);
 
-        log.info("LOGIN OTP GENERATED: {}", otp);
-
         try {
-            emailService.sendVerificationOtpEmail(user.getEmail(), otp);
+            emailService.sendVerificationOtpEmail(email, otp);
         } catch (Exception ex) {
-            log.error("Email sending failed", ex);
+            log.error("Login OTP email failed", ex);
         }
-
-        return true;
     }
 
-    // ===============================
-    // LOGIN STEP 2 → VERIFY OTP + JWT
-    // ===============================
+    // ================= LOGIN STEP 2 =================
     @Transactional
     public AuthResponse verifyLoginOtp(String email, String otp) {
 
         UserEntity user = userRepository.findByEmail(email)
                 .orElseThrow(() ->
-                        new ResponseStatusException(
-                                HttpStatus.NOT_FOUND, "User not found"));
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
         otpService.verifyLoginOtp(user, otp);
 
-        String accessToken = jwtUtil.generateAccessToken(user.getEmail());
+        String token = jwtUtil.generateAccessToken(user.getEmail());
 
         return AuthResponse.builder()
-                .accessToken(accessToken)
+                .accessToken(token)
                 .profile(mapToProfile(user))
                 .build();
     }
 
-    // ===============================
-    // HELPER: MAP PROFILE
-    // ===============================
+    // ================= PROFILE =================
     private ProfileResponse mapToProfile(UserEntity user) {
+
+        Optional<KycEntity> kycOpt = kycRepository.findByUser(user);
+
+        boolean isKycVerified = false;
+        String documentType = null;
+        String documentNumber = null;
+        String kycStatus = null;
+        String filePath = null; // ✅ FIX
+
+        if (kycOpt.isPresent()) {
+            KycEntity kyc = kycOpt.get();
+
+            documentType = kyc.getDocumentType();
+            documentNumber = kyc.getDocumentNumber();
+            kycStatus = kyc.getStatus();
+
+            filePath = kyc.getFilePath(); // ✅ IMPORTANT FIX
+
+            isKycVerified = "VERIFIED".equalsIgnoreCase(kyc.getStatus());
+        }
 
         return ProfileResponse.builder()
                 .userId(user.getUserId())
                 .name(user.getEntityName())
                 .email(user.getEmail())
-                .phoneNumber(user.getMobile())
+                .phoneNumber(user.getPhoneNumber())
                 .isAccountVerified(Boolean.TRUE.equals(user.getEmailVerified()))
-                .isKycVerified(user.getKyc() != null)
+                .isKycVerified(isKycVerified)
+
+                // ✅ NEW FIELDS
+                .referralCode(user.getReferralCode())
+                .documentType(documentType)
+                .documentNumber(documentNumber)
+                .kycStatus(kycStatus)
+
+                // ✅ CRITICAL FIX
+                .filePath(filePath)
+
                 .build();
     }
 }
