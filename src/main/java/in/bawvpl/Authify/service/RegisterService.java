@@ -19,10 +19,19 @@ public class RegisterService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final ReferralService referralService;
+    private final EmailService emailService;
 
     public UserEntity registerUser(RegisterRequest req) {
 
         // ================= VALIDATION =================
+
+        if (req.getEmail() == null || req.getEmail().isBlank()) {
+            throw new RuntimeException("Email is required");
+        }
+
+        if (req.getPhoneNumber() == null || req.getPhoneNumber().isBlank()) {
+            throw new RuntimeException("Phone number is required");
+        }
 
         if (userRepository.existsByEmail(req.getEmail())) {
             throw new RuntimeException("Email already registered");
@@ -43,13 +52,12 @@ public class RegisterService {
 
         String userId = "USR-" + UUID.randomUUID().toString().substring(0, 8);
 
-        // ✅ ALWAYS generate referral code
+        // ✅ Generate unique referral code
         String referralCode = referralService.generateUniqueReferralCode();
 
-        // ✅ ALWAYS generate verification token
+        // ✅ Generate verification token
         String verificationToken = UUID.randomUUID().toString();
 
-        // DEBUG (you can remove later)
         System.out.println("Generated verification token: " + verificationToken);
 
         // ================= CREATE USER =================
@@ -59,35 +67,35 @@ public class RegisterService {
                 .entityType(req.getEntityType())
                 .entityName(req.getName())
                 .contactPerson(req.getName())
-                .email(req.getEmail())
+                .email(req.getEmail().trim().toLowerCase())
                 .phoneNumber(req.getPhoneNumber())
                 .password(passwordEncoder.encode(req.getPassword()))
-                .adminRole(role)
+                .role(role)
                 .address(req.getAddress())
 
-                // ✅ OWN REFERRAL CODE
+                // ✅ REFERRAL
                 .referralCode(referralCode)
 
-                // ✅ EMAIL VERIFICATION TOKEN
+                // ✅ EMAIL VERIFICATION
                 .verificationToken(verificationToken)
-
-                // ✅ DEFAULT VALUES
                 .emailVerified(false)
-                .userStatus("ACTIVE")
 
+                .userStatus("ACTIVE")
                 .build();
 
         // ================= APPLY REFERRAL =================
 
         if (req.getReferralCode() != null && !req.getReferralCode().isBlank()) {
 
+            String refCode = req.getReferralCode().trim();
+
             Optional<UserEntity> refUser =
-                    userRepository.findByReferralCode(req.getReferralCode().trim());
+                    userRepository.findByReferralCode(refCode);
 
             if (refUser.isPresent()) {
-                user.setReferredBy(req.getReferralCode().trim());
+                user.setReferredBy(refCode);
             } else {
-                System.out.println("Invalid referral code: " + req.getReferralCode());
+                System.out.println("⚠️ Invalid referral code: " + refCode);
             }
         }
 
@@ -95,10 +103,20 @@ public class RegisterService {
 
         UserEntity savedUser = userRepository.save(user);
 
-        // 🔥 SAFETY CHECK (VERY IMPORTANT)
+        // ================= SAFETY CHECK =================
+
         if (savedUser.getVerificationToken() == null) {
             throw new RuntimeException("Verification token not saved!");
         }
+
+        // ================= SEND EMAIL =================
+
+        String verificationLink =
+                "http://43.205.116.38:8080/api/v1.0/verify?token=" + savedUser.getVerificationToken();
+
+        emailService.sendVerificationEmail(savedUser.getEmail(), verificationLink);
+
+        System.out.println("✅ Verification email sent to: " + savedUser.getEmail());
 
         return savedUser;
     }

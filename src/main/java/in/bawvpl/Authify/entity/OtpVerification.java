@@ -25,7 +25,7 @@ public class OtpVerification {
     private String purpose;
 
     private LocalDateTime expiryTime;
-    private Boolean isUsed;
+    private Boolean isUsed = false;
 
     private LocalDateTime createdAt = LocalDateTime.now();
 }

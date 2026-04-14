@@ -28,51 +28,70 @@ public class ProfileController {
     private final KycRepository kycRepository;
     private final JwtUtil jwtUtil;
 
+    private static final String BASE_URL = "http://43.205.116.38:8080";
+
     // ================= GET PROFILE =================
     @GetMapping
-    public ProfileResponse getProfile(Authentication authentication) {
+    public ResponseEntity<?> getProfile(Authentication authentication) {
+        try {
 
-        String email = authentication.getName();
+            if (authentication == null || authentication.getName() == null) {
+                return ResponseEntity.status(401).body("Unauthorized");
+            }
 
-        UserEntity user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+            String email = authentication.getName();
+            System.out.println("👤 PROFILE REQUEST FOR: " + email);
 
-        Optional<KycEntity> kycOpt = kycRepository.findByUser(user);
+            UserEntity user = userRepository.findByEmail(email)
+                    .orElseThrow(() -> new RuntimeException("User not found"));
 
-        String documentType = null;
-        String documentNumber = null;
-        String kycStatus = null;
-        String filePath = null;
-        boolean isKycVerified = false;
+            Optional<KycEntity> kycOpt = kycRepository.findByUser(user);
 
-        if (kycOpt.isPresent()) {
-            KycEntity kyc = kycOpt.get();
+            String documentType = null;
+            String documentNumber = null;
+            String kycStatus = null;
+            String filePath = null;
+            boolean isKycVerified = false;
 
-            documentType = kyc.getDocumentType();
-            documentNumber = kyc.getDocumentNumber();
-            kycStatus = kyc.getStatus();
-            filePath = kyc.getFilePath();
+            if (kycOpt.isPresent()) {
+                KycEntity kyc = kycOpt.get();
 
-            isKycVerified = "VERIFIED".equalsIgnoreCase(kyc.getStatus());
+                documentType = kyc.getDocumentType();
+                documentNumber = kyc.getDocumentNumber();
+                kycStatus = kyc.getStatus();
+                filePath = kyc.getFilePath();
+
+                isKycVerified = "VERIFIED".equalsIgnoreCase(kyc.getStatus());
+            }
+
+            // ✅ FIX: Always return FULL IMAGE URL
+            String photoUrl = null;
+            if (user.getPhotoUrl() != null && !user.getPhotoUrl().isBlank()) {
+                photoUrl = BASE_URL + "/uploads/" + user.getPhotoUrl();
+            }
+
+            ProfileResponse response = ProfileResponse.builder()
+                    .userId(user.getUserId())
+                    .name(user.getEntityName())
+                    .email(user.getEmail())
+                    .phoneNumber(user.getPhoneNumber())
+                    .isAccountVerified(Boolean.TRUE.equals(user.getEmailVerified()))
+                    .isKycVerified(isKycVerified)
+                    .referralCode(user.getReferralCode())
+                    .documentType(documentType)
+                    .documentNumber(documentNumber)
+                    .kycStatus(kycStatus)
+                    .filePath(filePath)
+                    .photoUrl(photoUrl)   // ✅ FINAL FIX
+                    .build();
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500)
+                    .body("Profile fetch failed: " + e.getMessage());
         }
-
-        return ProfileResponse.builder()
-                .userId(user.getUserId())
-                .name(user.getEntityName())
-                .email(user.getEmail())
-                .phoneNumber(user.getPhoneNumber())
-                .isAccountVerified(Boolean.TRUE.equals(user.getEmailVerified()))
-                .isKycVerified(isKycVerified)
-                .referralCode(user.getReferralCode())
-                .documentType(documentType)
-                .documentNumber(documentNumber)
-                .kycStatus(kycStatus)
-                .filePath(filePath)
-
-                // ✅ IMAGE
-                .photoUrl(user.getPhotoUrl())
-
-                .build();
     }
 
     // ================= UPLOAD PHOTO =================
@@ -82,16 +101,17 @@ public class ProfileController {
             HttpServletRequest request
     ) {
         try {
+
             System.out.println("🔥 UPLOAD API CALLED");
 
-            // ✅ CHECK FILE
+            // ✅ FILE CHECK
             if (file == null || file.isEmpty()) {
                 return ResponseEntity.badRequest().body("File is empty");
             }
 
             System.out.println("📁 File name: " + file.getOriginalFilename());
 
-            // ✅ GET TOKEN
+            // ✅ TOKEN CHECK
             String authHeader = request.getHeader("Authorization");
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {
                 return ResponseEntity.status(401).body("Invalid token");
@@ -100,15 +120,20 @@ public class ProfileController {
             String token = authHeader.substring(7);
             String email = jwtUtil.extractUsername(token);
 
+            if (email == null) {
+                return ResponseEntity.status(401).body("Invalid token user");
+            }
+
             System.out.println("👤 User email: " + email);
 
-            // ✅ GET USER
+            // ✅ FIND USER
             UserEntity user = userRepository.findByEmail(email)
                     .orElseThrow(() -> new RuntimeException("User not found"));
 
-            // ✅ SAVE FILE (ABSOLUTE PATH FIX)
+            // ✅ FILE NAME
             String fileName = System.currentTimeMillis() + "_" + file.getOriginalFilename();
 
+            // ✅ UPLOAD PATH
             Path uploadPath = Paths.get(System.getProperty("user.dir"), "uploads");
 
             if (!Files.exists(uploadPath)) {
@@ -117,8 +142,7 @@ public class ProfileController {
 
             Path filePath = uploadPath.resolve(fileName);
 
-            Files.copy(file.getInputStream(), filePath,
-                    StandardCopyOption.REPLACE_EXISTING);
+            Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
 
             System.out.println("✅ File saved at: " + filePath);
 
@@ -126,13 +150,16 @@ public class ProfileController {
             user.setPhotoUrl(fileName);
             userRepository.save(user);
 
-            System.out.println("✅ DB UPDATED WITH PHOTO");
+            System.out.println("✅ DB UPDATED WITH PHOTO: " + fileName);
 
-            return ResponseEntity.ok("Photo uploaded successfully");
+            return ResponseEntity.ok(
+                    "Photo uploaded successfully: " + BASE_URL + "/uploads/" + fileName
+            );
 
         } catch (Exception e) {
             e.printStackTrace();
-            return ResponseEntity.status(500).body("Upload failed: " + e.getMessage());
+            return ResponseEntity.status(500)
+                    .body("Upload failed: " + e.getMessage());
         }
     }
 }

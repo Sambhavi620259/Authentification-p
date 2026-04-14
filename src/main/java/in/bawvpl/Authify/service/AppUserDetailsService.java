@@ -40,7 +40,7 @@ public class AppUserDetailsService implements UserDetailsService {
     public UserDetails loadUserByUsername(String username)
             throws UsernameNotFoundException {
 
-        UserEntity user = userRepository.findByEmail(username)
+        UserEntity user = userRepository.findByEmail(username.toLowerCase())
                 .orElseThrow(() ->
                         new UsernameNotFoundException("User not found"));
 
@@ -49,8 +49,8 @@ public class AppUserDetailsService implements UserDetailsService {
                 .password(user.getPassword())
                 .authorities(List.of(
                         new SimpleGrantedAuthority(
-                                user.getAdminRole() != null
-                                        ? user.getAdminRole()
+                                user.getRole() != null
+                                        ? user.getRole()
                                         : "ROLE_USER"
                         )
                 ))
@@ -67,6 +67,8 @@ public class AppUserDetailsService implements UserDetailsService {
             String password,
             String address) {
 
+        email = email.trim().toLowerCase();
+
         if (userRepository.existsByEmail(email)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already registered");
         }
@@ -76,14 +78,17 @@ public class AppUserDetailsService implements UserDetailsService {
         }
 
         UserEntity user = UserEntity.builder()
-                .userId(UUID.randomUUID().toString())
+                .userId("USR-" + UUID.randomUUID().toString().substring(0, 8))
                 .entityType(entityType)
                 .entityName(name)
                 .contactPerson(name)
                 .email(email)
                 .phoneNumber(phoneNumber)
                 .password(passwordEncoder.encode(password))
-                .adminRole("ROLE_USER")
+
+                // ✅ FIXED HERE
+                .role("ROLE_USER")
+
                 .userStatus("ACTIVE")
                 .emailVerified(false)
                 .address(address)
@@ -101,23 +106,26 @@ public class AppUserDetailsService implements UserDetailsService {
         return user;
     }
 
-    // ================= SAVE USER =================
-    public UserEntity save(UserEntity user) {
-        return userRepository.save(user);
-    }
-
     // ================= LOGIN STEP 1 =================
     public void loginAndSendOtp(String email, String password) {
+
+        email = email.trim().toLowerCase();
 
         UserEntity user = userRepository.findByEmail(email)
                 .orElseThrow(() ->
                         new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        if (!Boolean.TRUE.equals(user.getEmailVerified())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Please verify your email first");
+        }
 
         if (!passwordEncoder.matches(password, user.getPassword())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
         }
 
         String otp = otpService.generateLoginOtp(user);
+
+        log.info("LOGIN OTP GENERATED for {} => {}", email, otp);
 
         try {
             emailService.sendVerificationOtpEmail(email, otp);
@@ -130,9 +138,15 @@ public class AppUserDetailsService implements UserDetailsService {
     @Transactional
     public AuthResponse verifyLoginOtp(String email, String otp) {
 
+        email = email.trim().toLowerCase();
+
         UserEntity user = userRepository.findByEmail(email)
                 .orElseThrow(() ->
                         new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        if (otp == null || otp.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP required");
+        }
 
         otpService.verifyLoginOtp(user, otp);
 
@@ -153,7 +167,7 @@ public class AppUserDetailsService implements UserDetailsService {
         String documentType = null;
         String documentNumber = null;
         String kycStatus = null;
-        String filePath = null; // ✅ FIX
+        String filePath = null;
 
         if (kycOpt.isPresent()) {
             KycEntity kyc = kycOpt.get();
@@ -161,8 +175,7 @@ public class AppUserDetailsService implements UserDetailsService {
             documentType = kyc.getDocumentType();
             documentNumber = kyc.getDocumentNumber();
             kycStatus = kyc.getStatus();
-
-            filePath = kyc.getFilePath(); // ✅ IMPORTANT FIX
+            filePath = kyc.getFilePath();
 
             isKycVerified = "VERIFIED".equalsIgnoreCase(kyc.getStatus());
         }
@@ -174,16 +187,11 @@ public class AppUserDetailsService implements UserDetailsService {
                 .phoneNumber(user.getPhoneNumber())
                 .isAccountVerified(Boolean.TRUE.equals(user.getEmailVerified()))
                 .isKycVerified(isKycVerified)
-
-                // ✅ NEW FIELDS
                 .referralCode(user.getReferralCode())
                 .documentType(documentType)
                 .documentNumber(documentNumber)
                 .kycStatus(kycStatus)
-
-                // ✅ CRITICAL FIX
                 .filePath(filePath)
-
                 .build();
     }
 }

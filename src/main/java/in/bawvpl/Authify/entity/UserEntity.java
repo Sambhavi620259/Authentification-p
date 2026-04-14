@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "users")
@@ -25,7 +26,7 @@ public class UserEntity {
     // ================= BASIC DETAILS =================
 
     @Column(name = "entity_type")
-    private String entityType; // INDIVIDUAL / ADMIN
+    private String entityType;
 
     @Column(name = "entity_name")
     private String entityName;
@@ -41,8 +42,9 @@ public class UserEntity {
 
     private String password;
 
+    // ✅ FIXED NAME
     @Column(name = "admin_role")
-    private String adminRole;
+    private String role;
 
     @Builder.Default
     @Column(name = "user_status")
@@ -57,17 +59,22 @@ public class UserEntity {
     @Column(name = "verification_token")
     private String verificationToken;
 
+    // ================= KYC =================
+
+    // ✅ IMPORTANT FIX (YOU WERE MISSING THIS)
+    @Builder.Default
+    @Column(name = "is_kyc_verified")
+    private Boolean isKycVerified = false;
+
     // ================= ADDRESS =================
 
     private String address;
 
     // ================= REFERRAL =================
 
-    // UNIQUE referral code for each user
     @Column(name = "referral_code", unique = true)
     private String referralCode;
 
-    // Who referred this user (store referral code or userId)
     @Column(name = "referred_by")
     private String referredBy;
 
@@ -89,13 +96,9 @@ public class UserEntity {
     @PrePersist
     public void prePersist() {
 
-        if (this.createdAt == null) {
-            this.createdAt = LocalDateTime.now();
-        }
-
+        this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
 
-        // Safety defaults
         if (this.userStatus == null) {
             this.userStatus = "ACTIVE";
         }
@@ -104,7 +107,11 @@ public class UserEntity {
             this.emailVerified = false;
         }
 
-        // Generate referral code if not set
+        if (this.isKycVerified == null) {
+            this.isKycVerified = false;
+        }
+
+        // ✅ SAFE REFERRAL GENERATION
         if (this.referralCode == null || this.referralCode.isEmpty()) {
             this.referralCode = generateReferralCode();
         }
@@ -115,9 +122,9 @@ public class UserEntity {
         this.updatedAt = LocalDateTime.now();
     }
 
-    // ================= HELPER METHOD =================
+    // ================= HELPER =================
 
     private String generateReferralCode() {
-        return "REF" + System.currentTimeMillis();
+        return "REF" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
     }
 }

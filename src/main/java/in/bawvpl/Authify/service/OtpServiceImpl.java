@@ -22,10 +22,10 @@ public class OtpServiceImpl implements OtpService {
 
     private final OtpRepository otpRepository;
 
-    private static final int LOGIN_EXPIRY = 5; // minutes
+    private static final int LOGIN_EXPIRY = 5;
     private static final int REGISTER_EXPIRY = 5;
 
-    // ================= GENERATE RANDOM OTP =================
+    // ================= GENERATE OTP =================
     @Override
     public String generateOtp() {
         return String.valueOf(ThreadLocalRandom.current().nextInt(100000, 999999));
@@ -37,6 +37,14 @@ public class OtpServiceImpl implements OtpService {
     public String generateLoginOtp(UserEntity user) {
 
         String otp = generateOtp();
+
+        // 🔥 OPTIONAL: invalidate old OTPs
+        otpRepository.findTopByEmailAndPurposeOrderByCreatedAtDesc(
+                user.getEmail(), "LOGIN"
+        ).ifPresent(oldOtp -> {
+            oldOtp.setIsUsed(true);
+            otpRepository.save(oldOtp);
+        });
 
         OtpVerification entity = new OtpVerification();
         entity.setUserId(user.getId());
@@ -76,6 +84,7 @@ public class OtpServiceImpl implements OtpService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP already used");
         }
 
+        // ✅ MARK USED
         entity.setIsUsed(true);
         otpRepository.save(entity);
 

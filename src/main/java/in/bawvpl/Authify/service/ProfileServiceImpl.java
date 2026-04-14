@@ -58,7 +58,7 @@ public class ProfileServiceImpl implements ProfileService {
                 .email(request.getEmail())
                 .phoneNumber(request.getPhoneNumber())
                 .password(passwordEncoder.encode(request.getPassword()))
-                .adminRole("ROLE_USER")
+                .role("ROLE_USER")
                 .address(request.getAddress())
                 .referralCode(request.getReferralCode())
                 .emailVerified(false)

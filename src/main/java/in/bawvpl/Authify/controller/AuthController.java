@@ -8,7 +8,6 @@ import in.bawvpl.Authify.io.AuthResponse;
 import in.bawvpl.Authify.io.RegisterRequest;
 import in.bawvpl.Authify.service.AppUserDetailsService;
 import in.bawvpl.Authify.service.RegisterService;
-import in.bawvpl.Authify.service.EmailService;
 
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -29,7 +28,6 @@ public class AuthController {
 
     private final AppUserDetailsService appUserDetailsService;
     private final RegisterService registerService;
-    private final EmailService emailService;
     private final KycRepository kycRepository;
     private final UserRepository userRepository;
 
@@ -49,27 +47,12 @@ public class AuthController {
     ) {
         try {
 
-            // ================= VALIDATION =================
             if (file == null || file.isEmpty()) {
                 return ResponseEntity.badRequest().body(Map.of("message", "File is required"));
             }
 
-            if (documentType == null || documentType.isBlank()
-                    || documentNumber == null || documentNumber.isBlank()) {
-                return ResponseEntity.badRequest().body(Map.of("message", "Document details required"));
-            }
-
-            if ("AADHAAR".equalsIgnoreCase(documentType) && !documentNumber.matches("\\d{12}")) {
-                return ResponseEntity.badRequest().body(Map.of("message", "Aadhaar must be 12 digits"));
-            }
-
-            if ("PAN".equalsIgnoreCase(documentType)
-                    && !documentNumber.matches("[A-Z]{5}[0-9]{4}[A-Z]{1}")) {
-                return ResponseEntity.badRequest().body(Map.of("message", "Invalid PAN format"));
-            }
-
-            // ================= FILE UPLOAD =================
-            Path uploadDir = Paths.get("uploads").toAbsolutePath();
+            // ✅ FILE UPLOAD
+            Path uploadDir = Paths.get(System.getProperty("user.dir"), "uploads");
             Files.createDirectories(uploadDir);
 
             String fileName = UUID.randomUUID() + "_" + file.getOriginalFilename();
@@ -77,7 +60,7 @@ public class AuthController {
 
             Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
 
-            // ================= PREPARE REQUEST =================
+            // ✅ PREPARE REQUEST
             RegisterRequest req = new RegisterRequest();
             req.setEntityType(entityType);
             req.setName(name);
@@ -89,22 +72,10 @@ public class AuthController {
             req.setDocumentType(documentType);
             req.setDocumentNumber(documentNumber);
 
-            // ================= REGISTER USER =================
+            // ✅ REGISTER USER
             UserEntity user = registerService.registerUser(req);
 
-            // 🔥 SAFETY CHECK
-            if (user.getVerificationToken() == null) {
-                throw new RuntimeException("Verification token not generated!");
-            }
-
-            // ================= SEND EMAIL =================
-            String verifyLink =
-                    "http://43.205.116.38:8080/api/v1.0/verify?token="
-                            + user.getVerificationToken();
-
-            emailService.sendVerificationEmail(user.getEmail(), verifyLink);
-
-            // ================= SAVE KYC =================
+            // ✅ SAVE KYC
             KycEntity kyc = KycEntity.builder()
                     .user(user)
                     .documentType(documentType)
@@ -117,7 +88,6 @@ public class AuthController {
 
             kycRepository.save(kyc);
 
-            // ================= RESPONSE =================
             return ResponseEntity.ok(Map.of(
                     "message", "Registered successfully. Please verify your email.",
                     "userId", user.getUserId(),
@@ -126,9 +96,8 @@ public class AuthController {
 
         } catch (Exception e) {
             e.printStackTrace();
-            return ResponseEntity.internalServerError().body(
-                    Map.of("message", e.getMessage())
-            );
+            return ResponseEntity.internalServerError()
+                    .body(Map.of("message", e.getMessage()));
         }
     }
 
@@ -140,7 +109,8 @@ public class AuthController {
                 userRepository.findByVerificationToken(token);
 
         if (optionalUser.isEmpty()) {
-            return ResponseEntity.badRequest().body("Invalid or expired token");
+            return ResponseEntity.badRequest()
+                    .body(Map.of("message", "Invalid or expired token"));
         }
 
         UserEntity user = optionalUser.get();
@@ -150,7 +120,9 @@ public class AuthController {
 
         userRepository.save(user);
 
-        return ResponseEntity.ok("Email verified successfully. You can now login.");
+        return ResponseEntity.ok(Map.of(
+                "message", "Email verified successfully"
+        ));
     }
 
     // ================= LOGIN =================
@@ -158,26 +130,38 @@ public class AuthController {
     public ResponseEntity<?> login(@RequestBody LoginRequest request) {
         try {
 
+            System.out.println("LOGIN API CALLED: " + request.getEmail());
+
             Optional<UserEntity> userOpt =
                     userRepository.findByEmail(request.getEmail());
 
-            if (userOpt.isPresent() && !userOpt.get().getEmailVerified()) {
-                return ResponseEntity.status(403).body(
-                        Map.of("message", "Please verify your email first")
-                );
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.status(400)
+                        .body(Map.of("message", "User not found"));
             }
 
+            UserEntity user = userOpt.get();
+
+            // ✅ BLOCK IF NOT VERIFIED
+            if (!Boolean.TRUE.equals(user.getEmailVerified())) {
+                return ResponseEntity.status(403)
+                        .body(Map.of("message", "Please verify your email first"));
+            }
+
+            // ✅ SEND OTP
             appUserDetailsService.loginAndSendOtp(
                     request.getEmail(),
                     request.getPassword()
             );
 
-            return ResponseEntity.ok(Map.of("message", "OTP sent"));
+            return ResponseEntity.ok(Map.of(
+                    "message", "OTP sent successfully"
+            ));
 
         } catch (Exception e) {
-            return ResponseEntity.status(400).body(
-                    Map.of("message", e.getMessage())
-            );
+            e.printStackTrace();
+            return ResponseEntity.status(400)
+                    .body(Map.of("message", e.getMessage()));
         }
     }
 
@@ -186,6 +170,8 @@ public class AuthController {
     public ResponseEntity<?> verifyOtp(@RequestBody VerifyOtpRequest request) {
         try {
 
+            System.out.println("VERIFY OTP: " + request.getEmail() + " OTP: " + request.getOtp());
+
             AuthResponse response = appUserDetailsService.verifyLoginOtp(
                     request.getEmail(),
                     request.getOtp()
@@ -193,14 +179,14 @@ public class AuthController {
 
             return ResponseEntity.ok(Map.of(
                     "message", "Login successful",
-                    "accessToken", response.getAccessToken(),
-                    "user", response.getProfile()
+                    "token", response.getAccessToken(),   // ✅ FIXED
+                    "userId", response.getProfile().getUserId()
             ));
 
         } catch (Exception e) {
-            return ResponseEntity.status(400).body(
-                    Map.of("message", e.getMessage())
-            );
+            e.printStackTrace();
+            return ResponseEntity.status(400)
+                    .body(Map.of("message", e.getMessage()));
         }
     }
 
