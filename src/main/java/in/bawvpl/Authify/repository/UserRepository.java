@@ -9,17 +9,33 @@ import java.util.Optional;
 @Repository
 public interface UserRepository extends JpaRepository<UserEntity, Long> {
 
-    // ✅ Find by email (LOGIN)
+    // ================= AUTH =================
+
+    // Find by email (LOGIN)
     Optional<UserEntity> findByEmail(String email);
 
-    // ✅ Check email exists
+    // Check email exists
     boolean existsByEmail(String email);
 
-    // ✅ Phone validation
+    // ================= PHONE =================
+
+    // Phone validation
     boolean existsByPhoneNumber(String phoneNumber);
 
     Optional<UserEntity> findByPhoneNumber(String phoneNumber);
 
-    // ✅ REQUIRED for KYC Controller (VERY IMPORTANT)
+    // ================= USER =================
+
+    // REQUIRED for KYC Controller
     Optional<UserEntity> findByUserId(String userId);
+
+    // ================= EMAIL VERIFICATION =================
+
+    // Find user by verification token
+    Optional<UserEntity> findByVerificationToken(String verificationToken);
+
+    // ================= REFERRAL =================
+
+    // Find user by referral code
+    Optional<UserEntity> findByReferralCode(String referralCode);
 }

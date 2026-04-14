@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -17,17 +18,16 @@ public class RegisterService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final ReferralService referralService;
 
     public UserEntity registerUser(RegisterRequest req) {
 
         // ================= VALIDATION =================
 
-        // ✅ CHECK EMAIL
         if (userRepository.existsByEmail(req.getEmail())) {
             throw new RuntimeException("Email already registered");
         }
 
-        // ✅ CHECK PHONE
         if (userRepository.existsByPhoneNumber(req.getPhoneNumber())) {
             throw new RuntimeException("Phone number already registered");
         }
@@ -39,9 +39,16 @@ public class RegisterService {
             role = "ROLE_ADMIN";
         }
 
+        // ================= GENERATE VALUES =================
+
+        String userId = "USR-" + UUID.randomUUID().toString().substring(0, 8);
+        String referralCode = referralService.generateUniqueReferralCode();
+        String verificationToken = UUID.randomUUID().toString();
+
         // ================= CREATE USER =================
+
         UserEntity user = UserEntity.builder()
-                .userId("USR-" + UUID.randomUUID().toString().substring(0, 8)) // ✅ Better ID
+                .userId(userId)
                 .entityType(req.getEntityType())
                 .entityName(req.getName())
                 .contactPerson(req.getName())
@@ -49,11 +56,24 @@ public class RegisterService {
                 .phoneNumber(req.getPhoneNumber())
                 .password(passwordEncoder.encode(req.getPassword()))
                 .adminRole(role)
-                .address(req.getAddress()) // ✅ NEW
-                .referralCode(req.getReferralCode()) // ✅ NEW
+                .address(req.getAddress())
+                .referralCode(referralCode) // ✅ OWN CODE
+                .verificationToken(verificationToken) // ✅ EMAIL TOKEN
                 .emailVerified(false)
                 .userStatus("ACTIVE")
                 .build();
+
+        // ================= APPLY REFERRAL =================
+
+        if (req.getReferralCode() != null && !req.getReferralCode().isBlank()) {
+
+            Optional<UserEntity> refUser =
+                    userRepository.findByReferralCode(req.getReferralCode().trim());
+
+            if (refUser.isPresent()) {
+                user.setReferredBy(req.getReferralCode().trim());
+            }
+        }
 
         return userRepository.save(user);
     }

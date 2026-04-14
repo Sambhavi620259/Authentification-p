@@ -48,18 +48,31 @@ public class UserEntity {
     @Column(name = "user_status")
     private String userStatus = "ACTIVE";
 
+    // ================= EMAIL VERIFICATION =================
+
     @Builder.Default
     @Column(name = "email_verified")
     private Boolean emailVerified = false;
+
+    @Column(name = "verification_token")
+    private String verificationToken;
+
+    // ================= ADDRESS =================
 
     private String address;
 
     // ================= REFERRAL =================
 
-    @Column(name = "referral_code")
+    // UNIQUE referral code for each user
+    @Column(name = "referral_code", unique = true)
     private String referralCode;
 
-    // ================= PROFILE IMAGE ================= (Optional but recommended)
+    // Who referred this user (store referral code or userId)
+    @Column(name = "referred_by")
+    private String referredBy;
+
+    // ================= PROFILE IMAGE =================
+
     @Column(name = "photo_url")
     private String photoUrl;
 
@@ -90,10 +103,21 @@ public class UserEntity {
         if (this.emailVerified == null) {
             this.emailVerified = false;
         }
+
+        // Generate referral code if not set
+        if (this.referralCode == null || this.referralCode.isEmpty()) {
+            this.referralCode = generateReferralCode();
+        }
     }
 
     @PreUpdate
     public void preUpdate() {
         this.updatedAt = LocalDateTime.now();
+    }
+
+    // ================= HELPER METHOD =================
+
+    private String generateReferralCode() {
+        return "REF" + System.currentTimeMillis();
     }
 }
