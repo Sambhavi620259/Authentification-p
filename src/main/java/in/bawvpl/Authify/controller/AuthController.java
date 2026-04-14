@@ -50,7 +50,6 @@ public class AuthController {
         try {
 
             // ================= VALIDATION =================
-
             if (file == null || file.isEmpty()) {
                 return ResponseEntity.badRequest().body(Map.of("message", "File is required"));
             }
@@ -70,7 +69,6 @@ public class AuthController {
             }
 
             // ================= FILE UPLOAD =================
-
             Path uploadDir = Paths.get("uploads").toAbsolutePath();
             Files.createDirectories(uploadDir);
 
@@ -80,7 +78,6 @@ public class AuthController {
             Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
 
             // ================= PREPARE REQUEST =================
-
             RegisterRequest req = new RegisterRequest();
             req.setEntityType(entityType);
             req.setName(name);
@@ -89,20 +86,25 @@ public class AuthController {
             req.setPassword(password);
             req.setAddress(address);
             req.setReferralCode(referralCode);
+            req.setDocumentType(documentType);
+            req.setDocumentNumber(documentNumber);
 
             // ================= REGISTER USER =================
-
             UserEntity user = registerService.registerUser(req);
 
-            // ================= SEND EMAIL =================
+            // 🔥 SAFETY CHECK
+            if (user.getVerificationToken() == null) {
+                throw new RuntimeException("Verification token not generated!");
+            }
 
-            String verifyLink = "http://localhost:8080/api/v1.0/verify?token="
-                    + user.getVerificationToken();
+            // ================= SEND EMAIL =================
+            String verifyLink =
+                    "http://43.205.116.38:8080/api/v1.0/verify?token="
+                            + user.getVerificationToken();
 
             emailService.sendVerificationEmail(user.getEmail(), verifyLink);
 
             // ================= SAVE KYC =================
-
             KycEntity kyc = KycEntity.builder()
                     .user(user)
                     .documentType(documentType)
@@ -116,7 +118,6 @@ public class AuthController {
             kycRepository.save(kyc);
 
             // ================= RESPONSE =================
-
             return ResponseEntity.ok(Map.of(
                     "message", "Registered successfully. Please verify your email.",
                     "userId", user.getUserId(),
@@ -125,7 +126,6 @@ public class AuthController {
 
         } catch (Exception e) {
             e.printStackTrace();
-
             return ResponseEntity.internalServerError().body(
                     Map.of("message", e.getMessage())
             );
@@ -193,7 +193,7 @@ public class AuthController {
 
             return ResponseEntity.ok(Map.of(
                     "message", "Login successful",
-                    "token", response.getAccessToken(),
+                    "accessToken", response.getAccessToken(),
                     "user", response.getProfile()
             ));
 
@@ -205,7 +205,6 @@ public class AuthController {
     }
 
     // ================= DTO =================
-
     @Data
     static class LoginRequest {
         private String email;

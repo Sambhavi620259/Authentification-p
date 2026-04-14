@@ -44,7 +44,7 @@ public class EmailService {
     private void sendOtpEmail(String to, String subject, String otp) {
 
         String html = """
-                <div style="font-family:Arial;">
+                <div style="font-family:Arial, sans-serif;">
                     <h2>Your OTP Code</h2>
                     <h1 style="color:#2e6cff;">%s</h1>
                     <p>This OTP is valid for a limited time.</p>
@@ -66,25 +66,51 @@ public class EmailService {
     public void sendVerificationEmail(String to, String verificationLink) {
 
         String html = """
-                <div style="font-family:Arial;">
+                <div style="font-family: Arial, sans-serif; line-height:1.6;">
+
                     <h2>Email Verification</h2>
-                    <p>Thank you for registering.</p>
+
+                    <p>Thank you for registering with us.</p>
+
                     <p>Please click the button below to verify your email:</p>
-                    
+
+                    <!-- BUTTON -->
                     <a href="%s" style="
                         display:inline-block;
-                        padding:10px 20px;
+                        padding:12px 24px;
                         background-color:#2e6cff;
                         color:white;
                         text-decoration:none;
-                        border-radius:5px;
+                        border-radius:6px;
+                        font-weight:500;
+                        margin-top:10px;
                     ">
                         Verify Email
                     </a>
 
-                    <p>If you did not register, please ignore this email.</p>
+                    <br/><br/>
+
+                    <!-- BACKUP LINK -->
+                    <p>If the button does not work, click the link below:</p>
+
+                    <p>
+                        <a href="%s" style="color:#2e6cff; word-break: break-all;">
+                            %s
+                        </a>
+                    </p>
+
+                    <br/>
+
+                    <p style="color:#888;">
+                        This link may expire after some time.
+                    </p>
+
+                    <p style="color:#888;">
+                        If you did not register, please ignore this email.
+                    </p>
+
                 </div>
-                """.formatted(verificationLink);
+                """.formatted(verificationLink, verificationLink, verificationLink);
 
         sendHtmlEmail(to, "Verify Your Email", html);
     }

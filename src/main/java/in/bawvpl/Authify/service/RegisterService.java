@@ -42,8 +42,15 @@ public class RegisterService {
         // ================= GENERATE VALUES =================
 
         String userId = "USR-" + UUID.randomUUID().toString().substring(0, 8);
+
+        // ✅ ALWAYS generate referral code
         String referralCode = referralService.generateUniqueReferralCode();
+
+        // ✅ ALWAYS generate verification token
         String verificationToken = UUID.randomUUID().toString();
+
+        // DEBUG (you can remove later)
+        System.out.println("Generated verification token: " + verificationToken);
 
         // ================= CREATE USER =================
 
@@ -57,10 +64,17 @@ public class RegisterService {
                 .password(passwordEncoder.encode(req.getPassword()))
                 .adminRole(role)
                 .address(req.getAddress())
-                .referralCode(referralCode) // ✅ OWN CODE
-                .verificationToken(verificationToken) // ✅ EMAIL TOKEN
+
+                // ✅ OWN REFERRAL CODE
+                .referralCode(referralCode)
+
+                // ✅ EMAIL VERIFICATION TOKEN
+                .verificationToken(verificationToken)
+
+                // ✅ DEFAULT VALUES
                 .emailVerified(false)
                 .userStatus("ACTIVE")
+
                 .build();
 
         // ================= APPLY REFERRAL =================
@@ -72,9 +86,20 @@ public class RegisterService {
 
             if (refUser.isPresent()) {
                 user.setReferredBy(req.getReferralCode().trim());
+            } else {
+                System.out.println("Invalid referral code: " + req.getReferralCode());
             }
         }
 
-        return userRepository.save(user);
+        // ================= SAVE USER =================
+
+        UserEntity savedUser = userRepository.save(user);
+
+        // 🔥 SAFETY CHECK (VERY IMPORTANT)
+        if (savedUser.getVerificationToken() == null) {
+            throw new RuntimeException("Verification token not saved!");
+        }
+
+        return savedUser;
     }
 }
