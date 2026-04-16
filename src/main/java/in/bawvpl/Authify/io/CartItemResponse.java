@@ -1,13 +1,17 @@
 package in.bawvpl.Authify.io;
 
-import lombok.Builder;
-import lombok.Data;
+import lombok.*;
 
-@Data
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 @Builder
 public class CartItemResponse {
-    private String id;
-    private String userId;
+
+    private Long id; // 🔥 FIXED (was String ❌)
+
+    private String userId; // email
     private String productId;
     private String productName;
     private double price;

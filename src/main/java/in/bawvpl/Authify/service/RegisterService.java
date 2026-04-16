@@ -5,15 +5,18 @@ import in.bawvpl.Authify.io.RegisterRequest;
 import in.bawvpl.Authify.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class RegisterService {
 
     private final UserRepository userRepository;
@@ -21,11 +24,15 @@ public class RegisterService {
     private final ReferralService referralService;
     private final EmailService emailService;
 
+    @Transactional
     public UserEntity registerUser(RegisterRequest req) {
+
+        // ================= NORMALIZE =================
+        String email = req.getEmail().toLowerCase().trim();
 
         // ================= VALIDATION =================
 
-        if (req.getEmail() == null || req.getEmail().isBlank()) {
+        if (email.isBlank()) {
             throw new RuntimeException("Email is required");
         }
 
@@ -33,7 +40,7 @@ public class RegisterService {
             throw new RuntimeException("Phone number is required");
         }
 
-        if (userRepository.existsByEmail(req.getEmail())) {
+        if (userRepository.existsByEmail(email)) {
             throw new RuntimeException("Email already registered");
         }
 
@@ -44,21 +51,19 @@ public class RegisterService {
         // ================= ROLE =================
         String role = "ROLE_USER";
 
-        if ("ADMIN".equalsIgnoreCase(req.getEntityType())) {
-            role = "ROLE_ADMIN";
+        if ("ORGANIZATION".equalsIgnoreCase(req.getEntityType())) {
+            role = "ROLE_ADMIN"; // 🔥 FIXED LOGIC
         }
 
         // ================= GENERATE VALUES =================
 
         String userId = "USR-" + UUID.randomUUID().toString().substring(0, 8);
 
-        // ✅ Generate unique referral code
         String referralCode = referralService.generateUniqueReferralCode();
 
-        // ✅ Generate verification token
         String verificationToken = UUID.randomUUID().toString();
 
-        System.out.println("Generated verification token: " + verificationToken);
+        log.info("Generated verification token for {}", email);
 
         // ================= CREATE USER =================
 
@@ -67,16 +72,16 @@ public class RegisterService {
                 .entityType(req.getEntityType())
                 .entityName(req.getName())
                 .contactPerson(req.getName())
-                .email(req.getEmail().trim().toLowerCase())
+                .email(email)
                 .phoneNumber(req.getPhoneNumber())
                 .password(passwordEncoder.encode(req.getPassword()))
-                .role(role)
+                .adminRole(role) // 🔥 FIXED FIELD
                 .address(req.getAddress())
 
-                // ✅ REFERRAL
+                // REFERRAL
                 .referralCode(referralCode)
 
-                // ✅ EMAIL VERIFICATION
+                // EMAIL VERIFY
                 .verificationToken(verificationToken)
                 .emailVerified(false)
 
@@ -95,15 +100,13 @@ public class RegisterService {
             if (refUser.isPresent()) {
                 user.setReferredBy(refCode);
             } else {
-                System.out.println("⚠️ Invalid referral code: " + refCode);
+                log.warn("Invalid referral code: {}", refCode);
             }
         }
 
         // ================= SAVE USER =================
 
         UserEntity savedUser = userRepository.save(user);
-
-        // ================= SAFETY CHECK =================
 
         if (savedUser.getVerificationToken() == null) {
             throw new RuntimeException("Verification token not saved!");
@@ -116,7 +119,7 @@ public class RegisterService {
 
         emailService.sendVerificationEmail(savedUser.getEmail(), verificationLink);
 
-        System.out.println("✅ Verification email sent to: " + savedUser.getEmail());
+        log.info("Verification email sent to {}", savedUser.getEmail());
 
         return savedUser;
     }

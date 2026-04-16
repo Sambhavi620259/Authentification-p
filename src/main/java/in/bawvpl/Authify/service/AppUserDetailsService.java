@@ -21,7 +21,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -35,7 +34,7 @@ public class AppUserDetailsService implements UserDetailsService {
     private final JwtUtil jwtUtil;
     private final KycRepository kycRepository;
 
-    // ================= SECURITY LOGIN =================
+    // ================= LOAD USER (SPRING SECURITY) =================
     @Override
     public UserDetails loadUserByUsername(String username)
             throws UsernameNotFoundException {
@@ -49,75 +48,12 @@ public class AppUserDetailsService implements UserDetailsService {
                 .password(user.getPassword())
                 .authorities(List.of(
                         new SimpleGrantedAuthority(
-                                user.getRole() != null
-                                        ? user.getRole()
+                                user.getAdminRole() != null
+                                        ? user.getAdminRole()
                                         : "ROLE_USER"
                         )
                 ))
                 .build();
-    }
-
-    // ================= REGISTER =================
-    @Transactional
-    public UserEntity registerUser(
-            String entityType,
-            String name,
-            String email,
-            String phoneNumber,
-            String password,
-            String address) {
-
-        email = email.trim().toLowerCase();
-
-        if (userRepository.existsByEmail(email)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already registered");
-        }
-
-        if (userRepository.existsByPhoneNumber(phoneNumber)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Phone already registered");
-        }
-
-        // ✅ ROLE FIX
-        String role = "ROLE_USER";
-        if ("ADMIN".equalsIgnoreCase(entityType)) {
-            role = "ROLE_ADMIN";
-        }
-
-        // ✅ EMAIL VERIFICATION TOKEN
-        String verificationToken = UUID.randomUUID().toString();
-
-        UserEntity user = UserEntity.builder()
-                .userId("USR-" + UUID.randomUUID().toString().substring(0, 8))
-                .entityType(entityType)
-                .entityName(name)
-                .contactPerson(name)
-                .email(email)
-                .phoneNumber(phoneNumber)
-                .password(passwordEncoder.encode(password))
-                .role(role)
-                .userStatus("ACTIVE")
-                .emailVerified(false)
-                .verificationToken(verificationToken) // 🔥 FIX
-                .address(address)
-                .build();
-
-        userRepository.save(user);
-
-        // ================= SEND EMAIL =================
-        try {
-            // OTP
-            String otp = otpService.generateRegisterOtp(user);
-            emailService.sendVerificationOtpEmail(user.getEmail(), otp);
-
-            // 🔥 Verification link
-            String link = "http://43.205.116.38:8080/api/v1.0/verify?token=" + verificationToken;
-            emailService.sendVerificationEmail(user.getEmail(), link);
-
-        } catch (Exception ex) {
-            log.error("Register email failed", ex);
-        }
-
-        return user;
     }
 
     // ================= LOGIN STEP 1 =================
@@ -129,17 +65,20 @@ public class AppUserDetailsService implements UserDetailsService {
                 .orElseThrow(() ->
                         new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
+        // ✅ EMAIL VERIFIED CHECK
         if (!Boolean.TRUE.equals(user.getEmailVerified())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Please verify your email first");
         }
 
+        // ✅ PASSWORD CHECK
         if (!passwordEncoder.matches(password, user.getPassword())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
         }
 
+        // ✅ GENERATE OTP
         String otp = otpService.generateLoginOtp(user);
 
-        log.info("LOGIN OTP GENERATED for {} => {}", email, otp);
+        log.info("LOGIN OTP GENERATED for {}", email);
 
         try {
             emailService.sendVerificationOtpEmail(email, otp);
@@ -162,8 +101,10 @@ public class AppUserDetailsService implements UserDetailsService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP required");
         }
 
+        // ✅ VERIFY OTP
         otpService.verifyLoginOtp(user, otp);
 
+        // ✅ GENERATE JWT
         String token = jwtUtil.generateAccessToken(user.getEmail());
 
         return AuthResponse.builder()
@@ -172,7 +113,7 @@ public class AppUserDetailsService implements UserDetailsService {
                 .build();
     }
 
-    // ================= PROFILE =================
+    // ================= PROFILE MAPPING =================
     private ProfileResponse mapToProfile(UserEntity user) {
 
         Optional<KycEntity> kycOpt = kycRepository.findByUser(user);
@@ -206,6 +147,7 @@ public class AppUserDetailsService implements UserDetailsService {
                 .documentNumber(documentNumber)
                 .kycStatus(kycStatus)
                 .filePath(filePath)
+                .photoUrl(user.getPhotoUrl()) // 🔥 IMPORTANT (profile image)
                 .build();
     }
 }

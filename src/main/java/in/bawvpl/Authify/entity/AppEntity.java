@@ -3,6 +3,8 @@ package in.bawvpl.Authify.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "applications")
 @Getter
@@ -12,24 +14,57 @@ import lombok.*;
 @Builder
 public class AppEntity {
 
-    // ✅ App_ID
+    // ================= ID =================
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long appId;
 
-    // ✅ App_Type (B2B / B2C)
+    // ================= TYPE =================
+    @Column(name = "app_type", nullable = false)
     private String appType;
 
-    // ✅ App_Name
+    // ================= NAME =================
+    @Column(name = "app_name", nullable = false, length = 150)
     private String appName;
 
-    // ✅ App_Text
-    @Column(length = 1000)
+    // ================= DESCRIPTION =================
+    @Column(name = "app_text", length = 1000)
     private String appText;
 
-    // ✅ App_URL
+    // ================= URL =================
+    @Column(name = "app_url", nullable = false)
     private String appUrl;
 
-    // ✅ App_Logo
+    // ================= LOGO =================
+    @Column(name = "app_logo")
     private String appLogo;
+
+    // ================= STATUS =================
+    @Builder.Default
+    @Column(name = "status", nullable = false)
+    private String status = "ACTIVE";
+
+    // ================= TIMESTAMP =================
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
+
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    // ================= AUTO =================
+    @PrePersist
+    public void onCreate() {
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
+        if (status == null || status.isBlank()) {
+            status = "ACTIVE";
+        }
+        updatedAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    public void onUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
 }

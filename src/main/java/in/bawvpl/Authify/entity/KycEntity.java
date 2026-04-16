@@ -6,7 +6,12 @@ import lombok.*;
 import java.time.Instant;
 
 @Entity
-@Table(name = "kyc_entity")
+@Table(
+        name = "kyc",
+        indexes = {
+                @Index(name = "idx_kyc_user", columnList = "user_id")
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -21,21 +26,21 @@ public class KycEntity {
     // ================= DOCUMENT =================
 
     @Column(name = "document_type", nullable = false)
-    private String documentType; // PAN / AADHAAR / DL / VOTER_ID
+    private String documentType; // PAN / AADHAAR
 
     @Column(name = "document_number", nullable = false, length = 50)
-    private String documentNumber; // Aadhaar / PAN number
+    private String documentNumber;
 
     @Column(name = "file_path", nullable = false)
-    private String filePath; // uploaded file name
+    private String filePath;
 
-    // ================= KYC STATUS =================
+    // ================= STATUS =================
 
-    @Column(nullable = false)
+    @Column(name = "status", nullable = false)
     private String status; // PENDING / VERIFIED / REJECTED
 
-    @Column(nullable = false)
-    private Boolean completed; // use Boolean (safer than primitive)
+    @Column(name = "completed", nullable = false)
+    private Boolean completed;
 
     // ================= TIMESTAMP =================
 
@@ -53,19 +58,30 @@ public class KycEntity {
     @PrePersist
     protected void onCreate() {
 
-        // Timestamp
         if (this.uploadedAt == null) {
             this.uploadedAt = Instant.now();
         }
 
-        // Default status
         if (this.status == null || this.status.isBlank()) {
-            this.status = "PENDING"; // ✅ correct flow
+            this.status = "PENDING";
         }
 
-        // Default completion
         if (this.completed == null) {
             this.completed = false;
         }
+    }
+
+    // ================= HELPER =================
+
+    public boolean isVerified() {
+        return "VERIFIED".equalsIgnoreCase(this.status);
+    }
+
+    public boolean isPending() {
+        return "PENDING".equalsIgnoreCase(this.status);
+    }
+
+    public boolean isRejected() {
+        return "REJECTED".equalsIgnoreCase(this.status);
     }
 }

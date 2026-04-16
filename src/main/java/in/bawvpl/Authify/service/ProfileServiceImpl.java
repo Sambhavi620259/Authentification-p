@@ -6,7 +6,6 @@ import in.bawvpl.Authify.io.ProfileRequest;
 import in.bawvpl.Authify.io.ProfileResponse;
 import in.bawvpl.Authify.repository.KycRepository;
 import in.bawvpl.Authify.repository.UserRepository;
-import in.bawvpl.Authify.util.JwtUtil;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,8 +29,9 @@ public class ProfileServiceImpl implements ProfileService {
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
     private final KycRepository kycRepository;
-    private final JwtUtil jwtUtil;
     private final OtpService otpService;
+
+    private static final String BASE_URL = "http://43.205.116.38:8080";
 
     // ================= REGISTER =================
     @Override
@@ -42,7 +42,9 @@ public class ProfileServiceImpl implements ProfileService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Request is empty");
         }
 
-        if (userRepository.existsByEmail(request.getEmail())) {
+        String email = request.getEmail().toLowerCase().trim();
+
+        if (userRepository.existsByEmail(email)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email already exists");
         }
 
@@ -55,10 +57,10 @@ public class ProfileServiceImpl implements ProfileService {
                 .entityType("INDIVIDUAL")
                 .entityName(request.getName())
                 .contactPerson(request.getName())
-                .email(request.getEmail())
+                .email(email)
                 .phoneNumber(request.getPhoneNumber())
                 .password(passwordEncoder.encode(request.getPassword()))
-                .role("ROLE_USER")
+                .adminRole("ROLE_USER")
                 .address(request.getAddress())
                 .referralCode(request.getReferralCode())
                 .emailVerified(false)
@@ -66,15 +68,16 @@ public class ProfileServiceImpl implements ProfileService {
 
         user = userRepository.save(user);
 
-        // SEND OTP
+        // ✅ SEND OTP
         String otp = otpService.generateRegisterOtp(user);
+
         try {
             emailService.sendVerificationOtpEmail(user.getEmail(), otp);
         } catch (Exception e) {
             log.error("OTP email failed", e);
         }
 
-        // SAVE KYC
+        // ✅ SAVE KYC
         if (request.getDocumentType() != null && request.getDocumentNumber() != null) {
 
             KycEntity kyc = KycEntity.builder()
@@ -98,6 +101,8 @@ public class ProfileServiceImpl implements ProfileService {
     @Transactional
     public String verifyOtp(String email, String otp) {
 
+        email = email.toLowerCase().trim();
+
         UserEntity user = findByEmailOrThrow(email);
 
         otpService.verifyLoginOtp(user, otp);
@@ -105,16 +110,14 @@ public class ProfileServiceImpl implements ProfileService {
         user.setEmailVerified(true);
         userRepository.save(user);
 
-        return jwtUtil.generateAccessToken(user.getEmail());
+        return "Email verified successfully";
     }
 
-    // ================= SEND VERIFICATION OTP =================
+    // ================= SEND REGISTER OTP =================
     @Override
     public void sendVerificationOtp(String email) {
 
-        if (email == null || email.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email is required");
-        }
+        email = email.toLowerCase().trim();
 
         UserEntity user = findByEmailOrThrow(email);
 
@@ -123,27 +126,24 @@ public class ProfileServiceImpl implements ProfileService {
         try {
             emailService.sendVerificationOtpEmail(user.getEmail(), otp);
         } catch (Exception e) {
-            log.error("Failed to send OTP", e);
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to send OTP");
         }
     }
 
-    // ================= SEND RESET OTP =================
+    // ================= SEND RESET OTP (🔥 FIXED) =================
     @Override
     public void sendResetOtp(String email) {
 
-        if (email == null || email.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email is required");
-        }
+        email = email.toLowerCase().trim();
 
         UserEntity user = findByEmailOrThrow(email);
 
-        String otp = otpService.generateOtp();
+        String otp = otpService.generateRegisterOtp(user); // reuse system
 
         try {
             emailService.sendResetOtpEmail(user.getEmail(), otp);
         } catch (Exception e) {
-            log.error("Failed to send reset OTP", e);
+            log.error("Reset OTP failed", e);
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to send reset OTP");
         }
     }
@@ -153,9 +153,11 @@ public class ProfileServiceImpl implements ProfileService {
     @Transactional
     public void resetPassword(String email, String otp, String newPassword) {
 
+        email = email.toLowerCase().trim();
+
         UserEntity user = findByEmailOrThrow(email);
 
-        // (Optional) verify OTP here if needed
+        // (optional) verify OTP here
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
     }
@@ -163,7 +165,7 @@ public class ProfileServiceImpl implements ProfileService {
     // ================= GET PROFILE =================
     @Override
     public ProfileResponse getProfile(String email) {
-        return convertToProfileResponse(findByEmailOrThrow(email));
+        return convertToProfileResponse(findByEmailOrThrow(email.toLowerCase().trim()));
     }
 
     // ================= HELPERS =================
@@ -194,22 +196,24 @@ public class ProfileServiceImpl implements ProfileService {
             isKycVerified = "VERIFIED".equalsIgnoreCase(kyc.getStatus());
         }
 
+        String photoUrl = null;
+        if (user.getPhotoUrl() != null && !user.getPhotoUrl().isBlank()) {
+            photoUrl = BASE_URL + "/uploads/" + user.getPhotoUrl();
+        }
+
         return ProfileResponse.builder()
                 .userId(user.getUserId())
                 .name(user.getEntityName())
                 .email(user.getEmail())
                 .phoneNumber(user.getPhoneNumber())
-
                 .isAccountVerified(Boolean.TRUE.equals(user.getEmailVerified()))
                 .isKycVerified(isKycVerified)
-
                 .referralCode(user.getReferralCode())
                 .documentType(documentType)
                 .documentNumber(documentNumber)
                 .kycStatus(kycStatus)
                 .filePath(filePath)
-                .photoUrl(user.getPhotoUrl())
-
+                .photoUrl(photoUrl)
                 .build();
     }
 
@@ -221,12 +225,12 @@ public class ProfileServiceImpl implements ProfileService {
 
     @Override
     public boolean existsByEmail(String email) {
-        return userRepository.existsByEmail(email);
+        return userRepository.existsByEmail(email.toLowerCase().trim());
     }
 
     @Override
     public UserEntity findByEmail(String email) {
-        return findByEmailOrThrow(email);
+        return findByEmailOrThrow(email.toLowerCase().trim());
     }
 
     @Override

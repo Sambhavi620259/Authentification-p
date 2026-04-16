@@ -13,23 +13,18 @@ import java.util.List;
 public interface KycRepository extends JpaRepository<KycEntity, Long> {
 
     // ================= BASIC =================
-
-    // Get KYC by User (MOST IMPORTANT)
     Optional<KycEntity> findByUser(UserEntity user);
 
-    // Check if KYC exists
     boolean existsByUser(UserEntity user);
 
-    // ================= ADVANCED =================
-
-    // Get KYC by userId (shortcut)
+    // ================= SHORTCUT =================
     Optional<KycEntity> findByUser_UserId(String userId);
 
-    // Get all KYC by status (PENDING / VERIFIED / REJECTED)
-    List<KycEntity> findByStatus(String status);
+    // ================= STATUS =================
+    List<KycEntity> findByStatusIgnoreCase(String status);
 
-    // ================= OPTIONAL (RECOMMENDED) =================
+    // ================= ADMIN =================
+    long countByStatusIgnoreCase(String status);
 
-    // Get all KYC for a specific user (safe fallback)
-    List<KycEntity> findAllByUser(UserEntity user);
+    List<KycEntity> findAllByOrderByUploadedAtDesc();
 }

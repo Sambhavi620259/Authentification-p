@@ -42,28 +42,25 @@ public class SecurityConfig {
 
                 // ================= EXCEPTION HANDLING =================
                 .exceptionHandling(ex -> ex
-
-                        // 🔐 401 → Unauthorized (no login)
-                        .authenticationEntryPoint((request, response, authException) -> {
-                            response.setStatus(401);
-                            response.setContentType("application/json");
-                            response.getWriter().write("{\"message\":\"Unauthorized\"}");
+                        .authenticationEntryPoint((req, res, ex1) -> {
+                            res.setStatus(401);
+                            res.setContentType("application/json");
+                            res.getWriter().write("{\"message\":\"Unauthorized\"}");
                         })
-
-                        // 🔐 403 → Forbidden (no permission)
-                        .accessDeniedHandler((request, response, accessDeniedException) -> {
-                            response.setStatus(403);
-                            response.setContentType("application/json");
-                            response.getWriter().write("{\"message\":\"Forbidden\"}");
+                        .accessDeniedHandler((req, res, ex2) -> {
+                            res.setStatus(403);
+                            res.setContentType("application/json");
+                            res.getWriter().write("{\"message\":\"Forbidden\"}");
                         })
                 )
 
                 // ================= AUTH RULES =================
                 .authorizeHttpRequests(auth -> auth
 
+                        // ✅ CORS preflight
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        // PUBLIC
+                        // ================= PUBLIC =================
                         .requestMatchers(
                                 "/",
                                 "/error",
@@ -79,15 +76,28 @@ public class SecurityConfig {
                                 "/v3/api-docs/**"
                         ).permitAll()
 
-                        // USER
-                        .requestMatchers("/api/v1.0/profile/**").authenticated()
+                        // ================= USER =================
+                        .requestMatchers(
+                                "/api/v1.0/profile/**",
+                                "/api/v1.0/app/**",
+                                "/api/v1.0/cart/**",
+                                "/api/v1.0/payment/**"
+                        ).authenticated()
 
-                        // ADMIN (GROUPED 🔥)
+                        // ================= ADMIN =================
                         .requestMatchers(
                                 "/api/v1.0/admin/**",
-                                "/api/v1.0/kyc/**"
+                                "/api/v1.0/kyc/verify/**",
+                                "/api/v1.0/kyc/reject/**",
+                                "/api/v1.0/kyc/all"
                         ).hasRole("ADMIN")
 
+                        // ================= USER + ADMIN =================
+                        .requestMatchers(
+                                "/api/v1.0/kyc/**"
+                        ).authenticated()
+
+                        // ================= FALLBACK =================
                         .anyRequest().authenticated()
                 )
 
@@ -103,25 +113,20 @@ public class SecurityConfig {
 
         CorsConfiguration config = new CorsConfiguration();
 
-        // ✅ Allow frontend origins
         config.setAllowedOriginPatterns(List.of(
                 "http://localhost:5173",
                 "http://localhost:5174",
                 "http://43.205.116.38:*"
         ));
 
-        // ✅ Methods
         config.setAllowedMethods(List.of(
                 "GET", "POST", "PUT", "DELETE", "OPTIONS"
         ));
 
-        // ✅ Headers
         config.setAllowedHeaders(List.of("*"));
 
-        // ✅ Allow credentials (JWT)
         config.setAllowCredentials(true);
 
-        // ✅ Allow frontend to read token
         config.setExposedHeaders(List.of("Authorization"));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

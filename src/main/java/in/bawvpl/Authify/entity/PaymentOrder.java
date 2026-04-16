@@ -1,12 +1,19 @@
 package in.bawvpl.Authify.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "payment_orders")
+@Table(
+        name = "payment_orders",
+        uniqueConstraints = {
+                @UniqueConstraint(columnNames = "order_id") // 🔥 important
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -18,30 +25,55 @@ public class PaymentOrder {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // ✅ RELATION WITH USER (IMPORTANT FIX)
-    @ManyToOne
+    // ================= USER =================
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
+    @JsonIgnore
     private UserEntity user;
 
-    // ✅ RELATION WITH APP (OPTIONAL BUT GOOD)
-    @ManyToOne
+    // ================= APP =================
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "app_id")
+    @JsonIgnore
     private AppEntity app;
 
-    // PAYMENT DETAILS
+    // ================= PAYMENT =================
+    @Column(name = "order_id", nullable = false, unique = true, length = 100)
     private String orderId;
-    private String paymentMethod;
-    private String paymentStatus;
+
+    @Column(name = "payment_method", nullable = false)
+    private String paymentMethod; // CARD / UPI / NETBANKING
+
+    @Column(name = "payment_status", nullable = false)
+    private String paymentStatus; // CREATED / PENDING / SUCCESS / FAILED
+
+    @Column(nullable = false)
     private Double amount;
 
+    // ================= TIMESTAMP =================
+    @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
-    // AUTO TIMESTAMP
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    // ================= AUTO =================
     @PrePersist
     public void onCreate() {
-        this.createdAt = LocalDateTime.now();
-        if (this.paymentStatus == null) {
-            this.paymentStatus = "CREATED";
+
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
         }
+
+        updatedAt = LocalDateTime.now();
+
+        if (paymentStatus == null || paymentStatus.isBlank()) {
+            paymentStatus = "CREATED";
+        }
+    }
+
+    @PreUpdate
+    public void onUpdate() {
+        updatedAt = LocalDateTime.now();
     }
 }

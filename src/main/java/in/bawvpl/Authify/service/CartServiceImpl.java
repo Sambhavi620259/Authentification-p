@@ -1,11 +1,17 @@
 package in.bawvpl.Authify.service;
 
+import in.bawvpl.Authify.entity.Cart;
 import in.bawvpl.Authify.entity.CartItem;
+import in.bawvpl.Authify.entity.UserEntity;
 import in.bawvpl.Authify.io.CartItemRequest;
 import in.bawvpl.Authify.io.CartItemResponse;
 import in.bawvpl.Authify.repository.CartItemRepository;
+import in.bawvpl.Authify.repository.CartRepository;
+import in.bawvpl.Authify.repository.UserRepository;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,13 +26,39 @@ import java.util.stream.Collectors;
 public class CartServiceImpl implements CartItemService {
 
     private final CartItemRepository cartItemRepository;
+    private final CartRepository cartRepository;
+    private final UserRepository userRepository;
 
-    // ADD ITEM
+    // ================= ADD ITEM =================
     @Override
     @Transactional
-    public CartItemResponse addItem(String userId, CartItemRequest req) {
+    public CartItemResponse addItem(String email, CartItemRequest req) {
 
-        CartItem existing = cartItemRepository.findByUserIdAndProductId(userId, req.getProductId())
+        email = email.toLowerCase().trim();
+
+        UserEntity user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "User not found"));
+
+        Cart cart = cartRepository.findByUser(user)
+                .orElseGet(() -> cartRepository.save(
+                        Cart.builder().user(user).build()
+                ));
+
+        if (req.getProductId() == null || req.getProductId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product ID required");
+        }
+
+        if (req.getQuantity() <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid quantity");
+        }
+
+        if (req.getPrice() <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid price");
+        }
+
+        CartItem existing = cartItemRepository
+                .findByCartAndProductId(cart, req.getProductId())
                 .orElse(null);
 
         if (existing != null) {
@@ -36,7 +68,7 @@ public class CartServiceImpl implements CartItemService {
         }
 
         CartItem item = CartItem.builder()
-                .userId(userId)
+                .cart(cart)
                 .productId(req.getProductId())
                 .productName(req.getProductName())
                 .price(req.getPrice())
@@ -46,31 +78,55 @@ public class CartServiceImpl implements CartItemService {
         return toResponse(cartItemRepository.save(item));
     }
 
-    // GET ITEMS FOR USER
+    // ================= GET ITEMS =================
     @Override
-    public List<CartItemResponse> getItemsForUser(String userId) {
-        return cartItemRepository.findByUserId(userId)
+    public List<CartItemResponse> getItemsForUser(String email) {
+
+        email = email.toLowerCase().trim();
+
+        UserEntity user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "User not found"));
+
+        Cart cart = cartRepository.findByUser(user)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Cart not found"));
+
+        return cartItemRepository.findByCart(cart)
                 .stream()
                 .map(this::toResponse)
                 .collect(Collectors.toList());
     }
 
-    // REMOVE ITEM
+    // ================= REMOVE ITEM =================
     @Override
     @Transactional
-    public void removeItem(String userId, String productId) {
+    public void removeItem(String email, String productId) {
 
-        CartItem item = cartItemRepository.findByUserIdAndProductId(userId, productId)
+        email = email.toLowerCase().trim();
+
+        UserEntity user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "User not found"));
+
+        Cart cart = cartRepository.findByUser(user)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Cart not found"));
+
+        CartItem item = cartItemRepository
+                .findByCartAndProductId(cart, productId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Item not found"));
 
         cartItemRepository.delete(item);
     }
 
+    // ================= MAPPER =================
     private CartItemResponse toResponse(CartItem item) {
+
         return CartItemResponse.builder()
                 .id(item.getId())
-                .userId(item.getUserId())
+                .userId(item.getCart().getUser().getEmail()) // 🔥 FIX
                 .productId(item.getProductId())
                 .productName(item.getProductName())
                 .price(item.getPrice())

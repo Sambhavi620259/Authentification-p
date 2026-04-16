@@ -1,13 +1,17 @@
 package in.bawvpl.Authify.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import jakarta.persistence.*;
 import lombok.*;
+
+import java.time.LocalDateTime;
 
 @Entity
 @Table(
         name = "user_applications",
         uniqueConstraints = {
-                @UniqueConstraint(columnNames = {"user_id", "app_id"}) // 🔥 prevent duplicates
+                @UniqueConstraint(columnNames = {"user_id", "app_id"})
         }
 )
 @Getter
@@ -24,11 +28,14 @@ public class UserApplicationEntity {
     // ================= USER =================
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
+    @ToString.Exclude
+    @JsonIgnore // 🔥 prevents infinite JSON loop
     private UserEntity user;
 
     // ================= APPLICATION =================
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "app_id", nullable = false)
+    @ToString.Exclude
     private AppEntity app;
 
     // ================= VISIT COUNT =================
@@ -42,6 +49,13 @@ public class UserApplicationEntity {
     private String subscriptionStatus = "APPLIED";
     // APPLIED / ACTIVE / EXPIRED
 
+    // ================= TIMESTAMP =================
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
+
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
     // ================= AUTO DEFAULT =================
     @PrePersist
     public void prePersist() {
@@ -53,5 +67,16 @@ public class UserApplicationEntity {
         if (subscriptionStatus == null) {
             subscriptionStatus = "APPLIED";
         }
+
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
+
+        updatedAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        updatedAt = LocalDateTime.now();
     }
 }

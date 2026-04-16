@@ -8,6 +8,7 @@ import in.bawvpl.Authify.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,22 +25,34 @@ public class KycController {
     private final KycRepository kycRepository;
     private final UserRepository userRepository;
 
-    // ================= GET ALL KYC =================
+    // ================= STATUS =================
+    private static final String PENDING = "PENDING";
+    private static final String VERIFIED = "VERIFIED";
+    private static final String REJECTED = "REJECTED";
+
+    // ================= GET ALL =================
     @GetMapping("/all")
     public ResponseEntity<?> getAllKyc() {
+
         List<KycEntity> list = kycRepository.findAll();
+
         return ResponseEntity.ok(Map.of(
                 "message", "All KYC fetched",
+                "count", list.size(),
                 "data", list
         ));
     }
 
-    // ================= GET PENDING KYC =================
+    // ================= GET PENDING =================
     @GetMapping("/pending")
     public ResponseEntity<?> getPendingKyc() {
-        List<KycEntity> list = kycRepository.findByStatus("PENDING");
+
+        // ✅ FIXED METHOD
+        List<KycEntity> list = kycRepository.findByStatusIgnoreCase(PENDING);
+
         return ResponseEntity.ok(Map.of(
                 "message", "Pending KYC fetched",
+                "count", list.size(),
                 "data", list
         ));
     }
@@ -47,6 +60,7 @@ public class KycController {
     // ================= GET USER KYC =================
     @GetMapping("/{userId}")
     public ResponseEntity<?> getUserKyc(@PathVariable String userId) {
+
         try {
             UserEntity user = userRepository.findByUserId(userId)
                     .orElseThrow(() -> new RuntimeException("User not found"));
@@ -60,16 +74,17 @@ public class KycController {
             ));
 
         } catch (Exception e) {
-            log.error("GET KYC ERROR: {}", e.getMessage());
-            return ResponseEntity.badRequest().body(
-                    Map.of("message", e.getMessage())
-            );
+            log.error("GET KYC ERROR for {}: {}", userId, e.getMessage());
+
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("message", e.getMessage()));
         }
     }
 
-    // ================= VERIFY KYC =================
+    // ================= VERIFY =================
     @PutMapping("/verify/{userId}")
     public ResponseEntity<?> verifyKyc(@PathVariable String userId) {
+
         try {
             log.info("VERIFY KYC CALLED for {}", userId);
 
@@ -80,33 +95,32 @@ public class KycController {
                     .orElseThrow(() -> new RuntimeException("KYC not found"));
 
             // ✅ UPDATE KYC
-            kyc.setStatus("VERIFIED");
+            kyc.setStatus(VERIFIED);
             kyc.setCompleted(true);
             kycRepository.save(kyc);
 
-            // ✅ ALSO UPDATE USER
+            // ✅ UPDATE USER
             user.setIsKycVerified(true);
             userRepository.save(user);
 
-            log.info("KYC VERIFIED for {}", userId);
-
             return ResponseEntity.ok(Map.of(
-                    "message", "KYC VERIFIED SUCCESSFULLY",
+                    "message", "KYC VERIFIED",
                     "userId", userId,
-                    "status", "VERIFIED"
+                    "status", VERIFIED
             ));
 
         } catch (Exception e) {
-            log.error("VERIFY ERROR: {}", e.getMessage());
-            return ResponseEntity.badRequest().body(
-                    Map.of("message", e.getMessage())
-            );
+            log.error("VERIFY ERROR for {}: {}", userId, e.getMessage());
+
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("message", e.getMessage()));
         }
     }
 
-    // ================= REJECT KYC =================
+    // ================= REJECT =================
     @PutMapping("/reject/{userId}")
     public ResponseEntity<?> rejectKyc(@PathVariable String userId) {
+
         try {
             log.info("REJECT KYC CALLED for {}", userId);
 
@@ -117,27 +131,25 @@ public class KycController {
                     .orElseThrow(() -> new RuntimeException("KYC not found"));
 
             // ❌ UPDATE
-            kyc.setStatus("REJECTED");
+            kyc.setStatus(REJECTED);
             kyc.setCompleted(false);
             kycRepository.save(kyc);
 
-            // ❌ UPDATE USER ALSO
+            // ❌ UPDATE USER
             user.setIsKycVerified(false);
             userRepository.save(user);
-
-            log.info("KYC REJECTED for {}", userId);
 
             return ResponseEntity.ok(Map.of(
                     "message", "KYC REJECTED",
                     "userId", userId,
-                    "status", "REJECTED"
+                    "status", REJECTED
             ));
 
         } catch (Exception e) {
-            log.error("REJECT ERROR: {}", e.getMessage());
-            return ResponseEntity.badRequest().body(
-                    Map.of("message", e.getMessage())
-            );
+            log.error("REJECT ERROR for {}: {}", userId, e.getMessage());
+
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("message", e.getMessage()));
         }
     }
 }

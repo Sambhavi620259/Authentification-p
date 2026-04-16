@@ -7,9 +7,9 @@ import java.util.List;
 
 public interface CartItemService {
 
-    CartItemResponse addItem(String userId, CartItemRequest req);
+    CartItemResponse addItem(String email, CartItemRequest req);
 
-    List<CartItemResponse> getItemsForUser(String userId);
+    List<CartItemResponse> getItemsForUser(String email);
 
-    void removeItem(String userId, String productId);
+    void removeItem(String email, String productId);
 }
