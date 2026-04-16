@@ -26,7 +26,7 @@ public class UserEntity {
     // ================= BASIC DETAILS =================
 
     @Column(name = "entity_type")
-    private String entityType; // INDIVIDUAL / ORGANIZATION
+    private String entityType;
 
     @Column(name = "entity_name")
     private String entityName;
@@ -43,9 +43,9 @@ public class UserEntity {
     @Column(nullable = false)
     private String password;
 
-    // ✅ FIXED (IMPORTANT)
+    // 🔥 FIXED (RENAMED FIELD)
     @Column(name = "admin_role")
-    private String adminRole;
+    private String role;
 
     // ================= USER STATUS =================
     @Builder.Default
@@ -108,7 +108,6 @@ public class UserEntity {
             this.isKycVerified = false;
         }
 
-        // ✅ Generate referral if missing
         if (this.referralCode == null || this.referralCode.isEmpty()) {
             this.referralCode = generateReferralCode();
         }
@@ -119,7 +118,6 @@ public class UserEntity {
         this.updatedAt = LocalDateTime.now();
     }
 
-    // ================= HELPER =================
     private String generateReferralCode() {
         return "REF" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
     }

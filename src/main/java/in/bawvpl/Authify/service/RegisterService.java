@@ -52,7 +52,7 @@ public class RegisterService {
         String role = "ROLE_USER";
 
         if ("ORGANIZATION".equalsIgnoreCase(req.getEntityType())) {
-            role = "ROLE_ADMIN"; // 🔥 FIXED LOGIC
+            role = "ROLE_ADMIN";
         }
 
         // ================= GENERATE VALUES =================
@@ -75,7 +75,7 @@ public class RegisterService {
                 .email(email)
                 .phoneNumber(req.getPhoneNumber())
                 .password(passwordEncoder.encode(req.getPassword()))
-                .adminRole(role) // 🔥 FIXED FIELD
+                .role(role) // 🔥 FIXED
                 .address(req.getAddress())
 
                 // REFERRAL

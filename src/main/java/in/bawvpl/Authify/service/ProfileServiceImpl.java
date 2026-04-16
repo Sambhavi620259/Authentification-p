@@ -60,7 +60,7 @@ public class ProfileServiceImpl implements ProfileService {
                 .email(email)
                 .phoneNumber(request.getPhoneNumber())
                 .password(passwordEncoder.encode(request.getPassword()))
-                .adminRole("ROLE_USER")
+                .role("ROLE_USER") // 🔥 FIXED (was adminRole ❌)
                 .address(request.getAddress())
                 .referralCode(request.getReferralCode())
                 .emailVerified(false)
@@ -68,7 +68,7 @@ public class ProfileServiceImpl implements ProfileService {
 
         user = userRepository.save(user);
 
-        // ✅ SEND OTP
+        // ================= SEND OTP =================
         String otp = otpService.generateRegisterOtp(user);
 
         try {
@@ -77,7 +77,7 @@ public class ProfileServiceImpl implements ProfileService {
             log.error("OTP email failed", e);
         }
 
-        // ✅ SAVE KYC
+        // ================= SAVE KYC =================
         if (request.getDocumentType() != null && request.getDocumentNumber() != null) {
 
             KycEntity kyc = KycEntity.builder()
@@ -130,7 +130,7 @@ public class ProfileServiceImpl implements ProfileService {
         }
     }
 
-    // ================= SEND RESET OTP (🔥 FIXED) =================
+    // ================= SEND RESET OTP =================
     @Override
     public void sendResetOtp(String email) {
 
@@ -138,7 +138,7 @@ public class ProfileServiceImpl implements ProfileService {
 
         UserEntity user = findByEmailOrThrow(email);
 
-        String otp = otpService.generateRegisterOtp(user); // reuse system
+        String otp = otpService.generateRegisterOtp(user);
 
         try {
             emailService.sendResetOtpEmail(user.getEmail(), otp);
@@ -157,7 +157,6 @@ public class ProfileServiceImpl implements ProfileService {
 
         UserEntity user = findByEmailOrThrow(email);
 
-        // (optional) verify OTP here
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
     }
@@ -175,6 +174,7 @@ public class ProfileServiceImpl implements ProfileService {
                         new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
     }
 
+    // 🔥🔥 FINAL FIXED IMAGE LOGIC
     private ProfileResponse convertToProfileResponse(UserEntity user) {
 
         Optional<KycEntity> kycOpt = kycRepository.findByUser(user);
@@ -196,9 +196,18 @@ public class ProfileServiceImpl implements ProfileService {
             isKycVerified = "VERIFIED".equalsIgnoreCase(kyc.getStatus());
         }
 
+        // ================= IMAGE FIX =================
         String photoUrl = null;
+
         if (user.getPhotoUrl() != null && !user.getPhotoUrl().isBlank()) {
-            photoUrl = BASE_URL + "/uploads/" + user.getPhotoUrl();
+
+            if (user.getPhotoUrl().startsWith("http")) {
+                photoUrl = user.getPhotoUrl(); // already full URL
+            } else if (user.getPhotoUrl().startsWith("/uploads")) {
+                photoUrl = BASE_URL + user.getPhotoUrl();
+            } else {
+                photoUrl = BASE_URL + "/uploads/" + user.getPhotoUrl();
+            }
         }
 
         return ProfileResponse.builder()

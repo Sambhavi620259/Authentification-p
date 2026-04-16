@@ -34,7 +34,7 @@ public class AppUserDetailsService implements UserDetailsService {
     private final JwtUtil jwtUtil;
     private final KycRepository kycRepository;
 
-    // ================= LOAD USER (SPRING SECURITY) =================
+    // ================= LOAD USER =================
     @Override
     public UserDetails loadUserByUsername(String username)
             throws UsernameNotFoundException {
@@ -43,16 +43,15 @@ public class AppUserDetailsService implements UserDetailsService {
                 .orElseThrow(() ->
                         new UsernameNotFoundException("User not found"));
 
+        // 🔥 FIXED ROLE
+        String role = (user.getRole() != null && !user.getRole().isBlank())
+                ? user.getRole()
+                : "ROLE_USER";
+
         return User.builder()
                 .username(user.getEmail())
                 .password(user.getPassword())
-                .authorities(List.of(
-                        new SimpleGrantedAuthority(
-                                user.getAdminRole() != null
-                                        ? user.getAdminRole()
-                                        : "ROLE_USER"
-                        )
-                ))
+                .authorities(List.of(new SimpleGrantedAuthority(role)))
                 .build();
     }
 
@@ -65,17 +64,14 @@ public class AppUserDetailsService implements UserDetailsService {
                 .orElseThrow(() ->
                         new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
-        // ✅ EMAIL VERIFIED CHECK
         if (!Boolean.TRUE.equals(user.getEmailVerified())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Please verify your email first");
         }
 
-        // ✅ PASSWORD CHECK
         if (!passwordEncoder.matches(password, user.getPassword())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
         }
 
-        // ✅ GENERATE OTP
         String otp = otpService.generateLoginOtp(user);
 
         log.info("LOGIN OTP GENERATED for {}", email);
@@ -101,10 +97,8 @@ public class AppUserDetailsService implements UserDetailsService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP required");
         }
 
-        // ✅ VERIFY OTP
         otpService.verifyLoginOtp(user, otp);
 
-        // ✅ GENERATE JWT
         String token = jwtUtil.generateAccessToken(user.getEmail());
 
         return AuthResponse.builder()
@@ -113,7 +107,7 @@ public class AppUserDetailsService implements UserDetailsService {
                 .build();
     }
 
-    // ================= PROFILE MAPPING =================
+    // ================= PROFILE =================
     private ProfileResponse mapToProfile(UserEntity user) {
 
         Optional<KycEntity> kycOpt = kycRepository.findByUser(user);
@@ -147,7 +141,7 @@ public class AppUserDetailsService implements UserDetailsService {
                 .documentNumber(documentNumber)
                 .kycStatus(kycStatus)
                 .filePath(filePath)
-                .photoUrl(user.getPhotoUrl()) // 🔥 IMPORTANT (profile image)
+                .photoUrl(user.getPhotoUrl())
                 .build();
     }
 }
