@@ -5,12 +5,15 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
+
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -26,27 +29,37 @@ public class JwtRequestFilter extends OncePerRequestFilter {
     private final JwtUtil jwtUtil;
     private final UserDetailsService userDetailsService;
 
+    // ================= PUBLIC PATHS =================
     private static final String[] PUBLIC_PATHS = {
             "/",
             "/error",
+
+            // AUTH
             "/api/v1.0/register",
             "/api/v1.0/login",
             "/api/v1.0/login/verify-otp",
+            "/api/v1.0/verify",                 // 🔥 FIXED
             "/api/v1.0/send-otp",
             "/api/v1.0/send-reset-otp",
             "/api/v1.0/reset-password",
+
+            // FILE ACCESS
+            "/uploads",                         // 🔥 FIXED
+
+            // SWAGGER
             "/swagger-ui",
             "/swagger-ui/",
             "/v3/api-docs",
             "/v3/api-docs/"
     };
 
+    // ================= SKIP FILTER =================
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
 
         String path = request.getRequestURI();
 
-        // ✅ allow OPTIONS
+        // ✅ Allow OPTIONS (CORS preflight)
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
             return true;
         }
@@ -55,6 +68,7 @@ public class JwtRequestFilter extends OncePerRequestFilter {
                 .anyMatch(p -> path.equals(p) || path.startsWith(p + "/"));
     }
 
+    // ================= MAIN FILTER =================
     @Override
     protected void doFilterInternal(
             HttpServletRequest request,
@@ -64,22 +78,24 @@ public class JwtRequestFilter extends OncePerRequestFilter {
 
         final String authHeader = request.getHeader("Authorization");
 
-        // ✅ No token → continue (important!)
+        // ✅ No token → continue
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             filterChain.doFilter(request, response);
             return;
         }
 
         String jwt = authHeader.substring(7);
-        String username;
+        String username = null;
 
         try {
             username = jwtUtil.extractUsername(jwt);
         } catch (Exception e) {
+            log.error("JWT parsing failed: {}", e.getMessage());
             filterChain.doFilter(request, response);
             return;
         }
 
+        // ✅ Authenticate user
         if (username != null &&
                 SecurityContextHolder.getContext().getAuthentication() == null) {
 
@@ -100,6 +116,10 @@ public class JwtRequestFilter extends OncePerRequestFilter {
                 );
 
                 SecurityContextHolder.getContext().setAuthentication(auth);
+
+                log.info("JWT authenticated user: {}", username);
+            } else {
+                log.warn("Invalid JWT token for user: {}", username);
             }
         }
 

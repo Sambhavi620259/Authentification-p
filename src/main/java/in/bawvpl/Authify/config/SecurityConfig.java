@@ -61,15 +61,12 @@ public class SecurityConfig {
                 // ================= AUTH RULES =================
                 .authorizeHttpRequests(auth -> auth
 
-                        // ✅ Preflight (CORS)
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        // ================= PUBLIC =================
+                        // PUBLIC
                         .requestMatchers(
                                 "/",
                                 "/error",
-
-                                // AUTH
                                 "/api/v1.0/register",
                                 "/api/v1.0/login",
                                 "/api/v1.0/login/verify-otp",
@@ -77,22 +74,20 @@ public class SecurityConfig {
                                 "/api/v1.0/send-otp",
                                 "/api/v1.0/send-reset-otp",
                                 "/api/v1.0/reset-password",
-
-                                // FILE ACCESS
                                 "/uploads/**",
-
-                                // SWAGGER
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**"
                         ).permitAll()
 
-                        // ================= USER =================
+                        // USER
                         .requestMatchers("/api/v1.0/profile/**").authenticated()
 
-                        // ================= ADMIN ONLY =================
-                        .requestMatchers("/api/v1.0/kyc/**").hasRole("ADMIN")
+                        // ADMIN (GROUPED 🔥)
+                        .requestMatchers(
+                                "/api/v1.0/admin/**",
+                                "/api/v1.0/kyc/**"
+                        ).hasRole("ADMIN")
 
-                        // ================= ALL OTHER =================
                         .anyRequest().authenticated()
                 )
 

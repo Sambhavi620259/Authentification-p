@@ -77,6 +77,15 @@ public class AppUserDetailsService implements UserDetailsService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Phone already registered");
         }
 
+        // ✅ ROLE FIX
+        String role = "ROLE_USER";
+        if ("ADMIN".equalsIgnoreCase(entityType)) {
+            role = "ROLE_ADMIN";
+        }
+
+        // ✅ EMAIL VERIFICATION TOKEN
+        String verificationToken = UUID.randomUUID().toString();
+
         UserEntity user = UserEntity.builder()
                 .userId("USR-" + UUID.randomUUID().toString().substring(0, 8))
                 .entityType(entityType)
@@ -85,22 +94,27 @@ public class AppUserDetailsService implements UserDetailsService {
                 .email(email)
                 .phoneNumber(phoneNumber)
                 .password(passwordEncoder.encode(password))
-
-                // ✅ FIXED HERE
-                .role("ROLE_USER")
-
+                .role(role)
                 .userStatus("ACTIVE")
                 .emailVerified(false)
+                .verificationToken(verificationToken) // 🔥 FIX
                 .address(address)
                 .build();
 
         userRepository.save(user);
 
+        // ================= SEND EMAIL =================
         try {
+            // OTP
             String otp = otpService.generateRegisterOtp(user);
             emailService.sendVerificationOtpEmail(user.getEmail(), otp);
+
+            // 🔥 Verification link
+            String link = "http://43.205.116.38:8080/api/v1.0/verify?token=" + verificationToken;
+            emailService.sendVerificationEmail(user.getEmail(), link);
+
         } catch (Exception ex) {
-            log.error("Register OTP email failed", ex);
+            log.error("Register email failed", ex);
         }
 
         return user;

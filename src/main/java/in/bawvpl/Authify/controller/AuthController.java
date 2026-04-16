@@ -47,11 +47,17 @@ public class AuthController {
     ) {
         try {
 
+            // ✅ FILE VALIDATION
             if (file == null || file.isEmpty()) {
                 return ResponseEntity.badRequest().body(Map.of("message", "File is required"));
             }
 
-            // ✅ FILE UPLOAD
+            String contentType = file.getContentType();
+            if (contentType == null || !contentType.startsWith("image/") && !contentType.equals("application/pdf")) {
+                return ResponseEntity.badRequest().body(Map.of("message", "Only image or PDF allowed"));
+            }
+
+            // ✅ SAVE FILE
             Path uploadDir = Paths.get(System.getProperty("user.dir"), "uploads");
             Files.createDirectories(uploadDir);
 
@@ -64,7 +70,7 @@ public class AuthController {
             RegisterRequest req = new RegisterRequest();
             req.setEntityType(entityType);
             req.setName(name);
-            req.setEmail(email);
+            req.setEmail(email.toLowerCase().trim()); // 🔥 FIX
             req.setPhoneNumber(phoneNumber);
             req.setPassword(password);
             req.setAddress(address);
@@ -105,15 +111,9 @@ public class AuthController {
     @GetMapping("/verify")
     public ResponseEntity<?> verifyEmail(@RequestParam String token) {
 
-        Optional<UserEntity> optionalUser =
-                userRepository.findByVerificationToken(token);
-
-        if (optionalUser.isEmpty()) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("message", "Invalid or expired token"));
-        }
-
-        UserEntity user = optionalUser.get();
+        UserEntity user = userRepository.findByVerificationToken(token)
+                .orElseThrow(() ->
+                        new RuntimeException("Invalid or expired token"));
 
         user.setEmailVerified(true);
         user.setVerificationToken(null);
@@ -130,29 +130,19 @@ public class AuthController {
     public ResponseEntity<?> login(@RequestBody LoginRequest request) {
         try {
 
-            System.out.println("LOGIN API CALLED: " + request.getEmail());
+            String email = request.getEmail().toLowerCase().trim();
 
-            Optional<UserEntity> userOpt =
-                    userRepository.findByEmail(request.getEmail());
+            UserEntity user = userRepository.findByEmail(email)
+                    .orElseThrow(() ->
+                            new RuntimeException("User not found"));
 
-            if (userOpt.isEmpty()) {
-                return ResponseEntity.status(400)
-                        .body(Map.of("message", "User not found"));
-            }
-
-            UserEntity user = userOpt.get();
-
-            // ✅ BLOCK IF NOT VERIFIED
             if (!Boolean.TRUE.equals(user.getEmailVerified())) {
                 return ResponseEntity.status(403)
                         .body(Map.of("message", "Please verify your email first"));
             }
 
             // ✅ SEND OTP
-            appUserDetailsService.loginAndSendOtp(
-                    request.getEmail(),
-                    request.getPassword()
-            );
+            appUserDetailsService.loginAndSendOtp(email, request.getPassword());
 
             return ResponseEntity.ok(Map.of(
                     "message", "OTP sent successfully"
@@ -170,16 +160,14 @@ public class AuthController {
     public ResponseEntity<?> verifyOtp(@RequestBody VerifyOtpRequest request) {
         try {
 
-            System.out.println("VERIFY OTP: " + request.getEmail() + " OTP: " + request.getOtp());
-
             AuthResponse response = appUserDetailsService.verifyLoginOtp(
-                    request.getEmail(),
+                    request.getEmail().toLowerCase().trim(), // 🔥 FIX
                     request.getOtp()
             );
 
             return ResponseEntity.ok(Map.of(
                     "message", "Login successful",
-                    "token", response.getAccessToken(),   // ✅ FIXED
+                    "token", response.getAccessToken(),
                     "userId", response.getProfile().getUserId()
             ));
 

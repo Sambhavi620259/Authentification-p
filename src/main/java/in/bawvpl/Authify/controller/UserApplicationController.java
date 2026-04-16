@@ -1,23 +1,59 @@
 package in.bawvpl.Authify.controller;
 
-import in.bawvpl.Authify.entity.UserApplicationEntity;
 import in.bawvpl.Authify.service.UserApplicationService;
+import in.bawvpl.Authify.util.JwtUtil;
+
+import jakarta.servlet.http.HttpServletRequest;
+
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/v1.0/user-app")
+@RequestMapping("/api/v1.0/app")
 @RequiredArgsConstructor
+@CrossOrigin("*")
 public class UserApplicationController {
 
-    private final UserApplicationService service;
+    private final UserApplicationService userApplicationService;
+    private final JwtUtil jwtUtil;
 
-    // ✅ APPLY APP
     @PostMapping("/apply")
-    public UserApplicationEntity apply(
-            @RequestParam Long userId,
-            @RequestParam Long appId
+    public ResponseEntity<?> applyApp(
+            @RequestParam Long appId,
+            HttpServletRequest request
     ) {
-        return service.applyApp(userId, appId); // ✅ FIXED
+        try {
+            String token = request.getHeader("Authorization").substring(7);
+            String email = jwtUtil.extractUsername(token);
+
+            return ResponseEntity.ok(
+                    userApplicationService.applyApp(email, appId)
+            );
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+    @GetMapping("/get")
+    public ResponseEntity<?> getUserApp(
+            @RequestParam Long appId,
+            HttpServletRequest request
+    ) {
+        try {
+            String token = request.getHeader("Authorization").substring(7);
+            String email = jwtUtil.extractUsername(token);
+
+            return ResponseEntity.ok(
+                    userApplicationService.getUserApp(email, appId)
+            );
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
     }
 }
