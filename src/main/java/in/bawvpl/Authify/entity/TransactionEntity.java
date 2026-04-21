@@ -1,5 +1,6 @@
 package in.bawvpl.Authify.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -18,35 +19,56 @@ public class TransactionEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // ✅ RELATION WITH USER
-    @ManyToOne
-    @JoinColumn(name = "user_id")
+    // ================= USER =================
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    @JsonIgnore
     private UserEntity user;
 
-    // ✅ RELATION WITH APP
-    @ManyToOne
+    // ================= APP =================
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "app_id")
-    private AppEntity app;
+    private ApplicationEntity app;
 
-    // ✅ TABLE-4 FIELDS
+    // ================= DETAILS =================
+    @Column(name = "payment_description")
     private String paymentDescription;
 
-    private LocalDateTime paymentDate;
-
+    @Column(name = "payment_method")
     private String paymentMethod;
 
+    @Column(name = "payment_source")
     private String paymentSource;
 
+    @Column(nullable = false)
     private Double amount;
 
-    private String paymentStatus;
+    // ================= DASHBOARD =================
+    @Column(name = "type", nullable = false)
+    private String type; // CREDIT / DEBIT
 
-    // ✅ AUTO TIME
+    @Column(name = "status", nullable = false)
+    private String status; // SUCCESS / FAILED / PENDING
+
+    @Column(name = "payment_date", nullable = false)
+    private LocalDateTime paymentDate;
+
+    // ================= AUTO =================
     @PrePersist
     public void onCreate() {
-        this.paymentDate = LocalDateTime.now();
-        if (this.paymentStatus == null) {
-            this.paymentStatus = "In Process";
+
+        LocalDateTime now = LocalDateTime.now();
+
+        if (this.paymentDate == null) {
+            this.paymentDate = now;
+        }
+
+        if (this.status == null || this.status.isBlank()) {
+            this.status = "PENDING";
+        }
+
+        if (this.type == null || this.type.isBlank()) {
+            this.type = "DEBIT";
         }
     }
 }

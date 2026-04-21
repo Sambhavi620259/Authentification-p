@@ -7,8 +7,13 @@ import lombok.Data;
 @Builder
 public class DashboardSummaryResponse {
 
-    private double totalBalance;
+    private int totalApps;
+    private int activeSubscriptions;
+    private double walletBalance;
     private int totalTransactions;
+    private int referralCount;
+    private String kycStatus;
+
     private double totalSpent;
     private double totalReceived;
 }

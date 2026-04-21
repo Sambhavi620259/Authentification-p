@@ -1,13 +1,13 @@
 package in.bawvpl.Authify.controller;
 
-import in.bawvpl.Authify.entity.TransactionEntity;
+import in.bawvpl.Authify.io.TransactionResponse;
 import in.bawvpl.Authify.io.DashboardSummaryResponse;
 import in.bawvpl.Authify.service.DashboardService;
+
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1.0/dashboard")
@@ -16,17 +16,25 @@ public class DashboardController {
 
     private final DashboardService dashboardService;
 
+    // ✅ Dashboard Summary
     @GetMapping("/summary/{userId}")
-    public ResponseEntity<DashboardSummaryResponse> getSummary(@PathVariable String userId) {
-        DashboardSummaryResponse summary = dashboardService.getSummary(userId);
-        return ResponseEntity.ok(summary);
+    public ResponseEntity<DashboardSummaryResponse> getSummary(
+            @PathVariable Long userId) {
+
+        return ResponseEntity.ok(
+                dashboardService.getSummary(userId)
+        );
     }
 
+    // ✅ Transactions with pagination
     @GetMapping("/transactions/{userId}")
-    public ResponseEntity<List<TransactionEntity>> getRecentTransactions(
-            @PathVariable String userId,
-            @RequestParam(name = "limit", defaultValue = "10") int limit) {
-        List<TransactionEntity> txns = dashboardService.getRecentTransactions(userId, limit);
-        return ResponseEntity.ok(txns);
+    public ResponseEntity<Page<TransactionResponse>> getTransactions(
+            @PathVariable Long userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        return ResponseEntity.ok(
+                dashboardService.getTransactions(userId, page, size)
+        );
     }
 }

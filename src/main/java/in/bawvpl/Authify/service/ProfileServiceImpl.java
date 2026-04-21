@@ -60,7 +60,7 @@ public class ProfileServiceImpl implements ProfileService {
                 .email(email)
                 .phoneNumber(request.getPhoneNumber())
                 .password(passwordEncoder.encode(request.getPassword()))
-                .role("ROLE_USER") // 🔥 FIXED (was adminRole ❌)
+                .role("ROLE_USER")
                 .address(request.getAddress())
                 .referralCode(request.getReferralCode())
                 .emailVerified(false)
@@ -68,7 +68,7 @@ public class ProfileServiceImpl implements ProfileService {
 
         user = userRepository.save(user);
 
-        // ================= SEND OTP =================
+        // ✅ SEND REGISTER OTP
         String otp = otpService.generateRegisterOtp(user);
 
         try {
@@ -105,7 +105,9 @@ public class ProfileServiceImpl implements ProfileService {
 
         UserEntity user = findByEmailOrThrow(email);
 
-        otpService.verifyLoginOtp(user, otp);
+        // ✅ FIXED
+
+        otpService.verifyRegisterOtp(user, otp);
 
         user.setEmailVerified(true);
         userRepository.save(user);
@@ -157,6 +159,9 @@ public class ProfileServiceImpl implements ProfileService {
 
         UserEntity user = findByEmailOrThrow(email);
 
+        // ✅ FIXED (SECURITY)
+        otpService.verifyRegisterOtp(user, otp);
+
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
     }
@@ -174,14 +179,14 @@ public class ProfileServiceImpl implements ProfileService {
                         new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
     }
 
-    // 🔥🔥 FINAL FIXED IMAGE LOGIC
+    // ================= PROFILE MAPPER =================
     private ProfileResponse convertToProfileResponse(UserEntity user) {
 
         Optional<KycEntity> kycOpt = kycRepository.findByUser(user);
 
         String documentType = null;
         String documentNumber = null;
-        String kycStatus = null;
+        String kycStatus = "PENDING";
         String filePath = null;
         boolean isKycVerified = false;
 
@@ -193,16 +198,16 @@ public class ProfileServiceImpl implements ProfileService {
             kycStatus = kyc.getStatus();
             filePath = kyc.getFilePath();
 
-            isKycVerified = "VERIFIED".equalsIgnoreCase(kyc.getStatus());
+            isKycVerified = "VERIFIED".equalsIgnoreCase(kycStatus);
         }
 
-        // ================= IMAGE FIX =================
+        // ================= IMAGE =================
         String photoUrl = null;
 
         if (user.getPhotoUrl() != null && !user.getPhotoUrl().isBlank()) {
 
             if (user.getPhotoUrl().startsWith("http")) {
-                photoUrl = user.getPhotoUrl(); // already full URL
+                photoUrl = user.getPhotoUrl();
             } else if (user.getPhotoUrl().startsWith("/uploads")) {
                 photoUrl = BASE_URL + user.getPhotoUrl();
             } else {

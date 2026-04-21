@@ -21,7 +21,7 @@ public class SupportService {
         UserEntity user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        AppEntity app = appRepository.findById(appId)
+       ApplicationEntity app = appRepository.findById(appId)
                 .orElseThrow(() -> new RuntimeException("App not found"));
 
         SupportQuery support = SupportQuery.builder()

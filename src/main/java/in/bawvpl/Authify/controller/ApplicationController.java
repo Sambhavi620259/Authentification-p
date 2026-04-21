@@ -1,7 +1,8 @@
 package in.bawvpl.Authify.controller;
 
-import in.bawvpl.Authify.entity.AppEntity;
+import in.bawvpl.Authify.entity.ApplicationEntity;
 import in.bawvpl.Authify.service.AppService;
+
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,14 +20,14 @@ import java.util.Map;
 @Slf4j
 public class ApplicationController {
 
-    private final AppService appService;
+    private final AppService applicationService;
 
     // ================= CREATE =================
     @PostMapping
-    public ResponseEntity<?> create(@RequestBody AppEntity app) {
+    public ResponseEntity<?> create(@RequestBody ApplicationEntity app) {
 
         try {
-            AppEntity saved = appService.createApp(app);
+            ApplicationEntity saved = applicationService.createApp(app);
 
             return ResponseEntity.ok(Map.of(
                     "message", "App created",
@@ -46,7 +47,7 @@ public class ApplicationController {
     @GetMapping
     public ResponseEntity<?> all() {
 
-        List<AppEntity> list = appService.getAllApps();
+        List<ApplicationEntity> list = applicationService.getAllApps();
 
         return ResponseEntity.ok(Map.of(
                 "message", "Apps fetched",
@@ -59,7 +60,7 @@ public class ApplicationController {
     public ResponseEntity<?> one(@PathVariable Long id) {
 
         try {
-            AppEntity app = appService.getApp(id);
+            ApplicationEntity app = applicationService.getApp(id);
 
             return ResponseEntity.ok(Map.of(
                     "message", "App fetched",
@@ -77,11 +78,11 @@ public class ApplicationController {
     @PutMapping("/{id}")
     public ResponseEntity<?> update(
             @PathVariable Long id,
-            @RequestBody AppEntity app
+            @RequestBody ApplicationEntity app
     ) {
 
         try {
-            AppEntity updated = appService.updateApp(id, app);
+            ApplicationEntity updated = applicationService.updateApp(id, app);
 
             return ResponseEntity.ok(Map.of(
                     "message", "App updated",
@@ -102,7 +103,7 @@ public class ApplicationController {
     public ResponseEntity<?> delete(@PathVariable Long id) {
 
         try {
-            appService.deleteApp(id);
+            applicationService.deleteApp(id);
 
             return ResponseEntity.ok(Map.of(
                     "message", "Deleted successfully"

@@ -1,7 +1,6 @@
 package in.bawvpl.Authify.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -12,6 +11,9 @@ import java.time.LocalDateTime;
         name = "user_applications",
         uniqueConstraints = {
                 @UniqueConstraint(columnNames = {"user_id", "app_id"})
+        },
+        indexes = {
+                @Index(name = "idx_user_app", columnList = "user_id, app_id")
         }
 )
 @Getter
@@ -29,50 +31,53 @@ public class UserApplicationEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     @ToString.Exclude
-    @JsonIgnore // 🔥 prevents infinite JSON loop
+    @JsonIgnore
     private UserEntity user;
 
     // ================= APPLICATION =================
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "app_id", nullable = false)
     @ToString.Exclude
-    private AppEntity app;
+    @JsonIgnore
+    private ApplicationEntity app;   // ✅ FIXED
 
     // ================= VISIT COUNT =================
     @Builder.Default
-    @Column(name = "visit_counter")
+    @Column(name = "visit_counter", nullable = false)
     private Integer visitCounter = 0;
 
     // ================= SUBSCRIPTION STATUS =================
     @Builder.Default
-    @Column(name = "subscription_status")
+    @Column(name = "subscription_status", nullable = false)
     private String subscriptionStatus = "APPLIED";
     // APPLIED / ACTIVE / EXPIRED
 
     // ================= TIMESTAMP =================
-    @Column(name = "created_at", updatable = false)
+    @Column(name = "created_at", updatable = false, nullable = false)
     private LocalDateTime createdAt;
 
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    // ================= AUTO DEFAULT =================
+    // ================= AUTO =================
     @PrePersist
     public void prePersist() {
+
+        LocalDateTime now = LocalDateTime.now();
 
         if (visitCounter == null) {
             visitCounter = 0;
         }
 
-        if (subscriptionStatus == null) {
+        if (subscriptionStatus == null || subscriptionStatus.isBlank()) {
             subscriptionStatus = "APPLIED";
         }
 
         if (createdAt == null) {
-            createdAt = LocalDateTime.now();
+            createdAt = now;
         }
 
-        updatedAt = LocalDateTime.now();
+        updatedAt = now;
     }
 
     @PreUpdate

@@ -1,5 +1,6 @@
 package in.bawvpl.Authify.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -12,55 +13,57 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class AppEntity {
+public class ApplicationEntity {
 
-    // ================= ID =================
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long appId;
+
+    // ================= USER =================
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    @JsonIgnore
+    private UserEntity user;
 
     // ================= TYPE =================
     @Column(name = "app_type", nullable = false)
     private String appType;
 
-    // ================= NAME =================
-    @Column(name = "app_name", nullable = false, length = 150)
+    @Column(name = "app_name", nullable = false)
     private String appName;
 
-    // ================= DESCRIPTION =================
-    @Column(name = "app_text", length = 1000)
+    @Column(name = "app_text")
     private String appText;
 
-    // ================= URL =================
     @Column(name = "app_url", nullable = false)
     private String appUrl;
 
-    // ================= LOGO =================
     @Column(name = "app_logo")
     private String appLogo;
 
-    // ================= STATUS =================
     @Builder.Default
-    @Column(name = "status", nullable = false)
+    @Column(nullable = false)
     private String status = "ACTIVE";
 
-    // ================= TIMESTAMP =================
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    // ================= AUTO =================
     @PrePersist
     public void onCreate() {
+        LocalDateTime now = LocalDateTime.now();
+
         if (createdAt == null) {
-            createdAt = LocalDateTime.now();
+            createdAt = now;
         }
-        if (status == null || status.isBlank()) {
+
+        if (status == null) {
             status = "ACTIVE";
         }
-        updatedAt = LocalDateTime.now();
+
+        updatedAt = now;
     }
 
     @PreUpdate

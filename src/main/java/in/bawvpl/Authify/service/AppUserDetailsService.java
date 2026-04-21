@@ -43,7 +43,6 @@ public class AppUserDetailsService implements UserDetailsService {
                 .orElseThrow(() ->
                         new UsernameNotFoundException("User not found"));
 
-        // 🔥 FIXED ROLE
         String role = (user.getRole() != null && !user.getRole().isBlank())
                 ? user.getRole()
                 : "ROLE_USER";
@@ -99,6 +98,7 @@ public class AppUserDetailsService implements UserDetailsService {
 
         otpService.verifyLoginOtp(user, otp);
 
+        // ✅ GENERATE JWT
         String token = jwtUtil.generateAccessToken(user.getEmail());
 
         return AuthResponse.builder()
@@ -115,10 +115,11 @@ public class AppUserDetailsService implements UserDetailsService {
         boolean isKycVerified = false;
         String documentType = null;
         String documentNumber = null;
-        String kycStatus = null;
+        String kycStatus = "PENDING";
         String filePath = null;
 
         if (kycOpt.isPresent()) {
+
             KycEntity kyc = kycOpt.get();
 
             documentType = kyc.getDocumentType();
@@ -126,7 +127,7 @@ public class AppUserDetailsService implements UserDetailsService {
             kycStatus = kyc.getStatus();
             filePath = kyc.getFilePath();
 
-            isKycVerified = "VERIFIED".equalsIgnoreCase(kyc.getStatus());
+            isKycVerified = "VERIFIED".equalsIgnoreCase(kycStatus);
         }
 
         return ProfileResponse.builder()

@@ -3,7 +3,8 @@ package in.bawvpl.Authify.repository;
 import in.bawvpl.Authify.entity.KycEntity;
 import in.bawvpl.Authify.entity.UserEntity;
 
-import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.*;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -23,8 +24,11 @@ public interface KycRepository extends JpaRepository<KycEntity, Long> {
     // ================= STATUS =================
     List<KycEntity> findByStatusIgnoreCase(String status);
 
-    // ================= ADMIN =================
     long countByStatusIgnoreCase(String status);
 
     List<KycEntity> findAllByOrderByUploadedAtDesc();
+
+    // ================= DASHBOARD (IMPORTANT) =================
+    @Query("SELECT k.status FROM KycEntity k WHERE k.user.id = :userId")
+    String findStatusByUser_Id(@Param("userId") Long userId);
 }

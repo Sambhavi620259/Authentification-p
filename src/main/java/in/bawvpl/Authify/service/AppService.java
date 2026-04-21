@@ -1,7 +1,7 @@
 package in.bawvpl.Authify.service;
 
-import in.bawvpl.Authify.entity.AppEntity;
-import in.bawvpl.Authify.repository.AppRepository;
+import in.bawvpl.Authify.entity.ApplicationEntity;
+import in.bawvpl.Authify.repository.ApplicationRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,15 +18,15 @@ import java.util.List;
 @Slf4j
 public class AppService {
 
-    private final AppRepository appRepository;
+    private final ApplicationRepository applicationRepository;
 
     // ================= CREATE =================
     @Transactional
-    public AppEntity createApp(AppEntity app) {
+    public ApplicationEntity createApp(ApplicationEntity app) {
 
         validateApp(app);
 
-        AppEntity saved = appRepository.save(app);
+        ApplicationEntity saved = applicationRepository.save(app);
 
         log.info("App created: {}", saved.getAppName());
 
@@ -34,9 +34,9 @@ public class AppService {
     }
 
     // ================= GET ALL =================
-    public List<AppEntity> getAllApps() {
+    public List<ApplicationEntity> getAllApps() {
 
-        List<AppEntity> list = appRepository.findAll();
+        List<ApplicationEntity> list = applicationRepository.findAll();
 
         log.info("Fetched {} apps", list.size());
 
@@ -44,9 +44,9 @@ public class AppService {
     }
 
     // ================= GET ONE =================
-    public AppEntity getApp(Long id) {
+    public ApplicationEntity getApp(Long id) {
 
-        return appRepository.findById(id)
+        return applicationRepository.findById(id)
                 .orElseThrow(() ->
                         new ResponseStatusException(HttpStatus.NOT_FOUND, "App not found")
                 );
@@ -54,9 +54,9 @@ public class AppService {
 
     // ================= UPDATE =================
     @Transactional
-    public AppEntity updateApp(Long id, AppEntity updated) {
+    public ApplicationEntity updateApp(Long id, ApplicationEntity updated) {
 
-        AppEntity app = getApp(id);
+        ApplicationEntity app = getApp(id);
 
         if (updated.getAppName() != null && !updated.getAppName().isBlank()) {
             app.setAppName(updated.getAppName());
@@ -82,7 +82,7 @@ public class AppService {
             app.setStatus(updated.getStatus());
         }
 
-        AppEntity saved = appRepository.save(app);
+        ApplicationEntity saved = applicationRepository.save(app);
 
         log.info("App updated: {}", saved.getAppName());
 
@@ -93,15 +93,15 @@ public class AppService {
     @Transactional
     public void deleteApp(Long id) {
 
-        AppEntity app = getApp(id);
+        ApplicationEntity app = getApp(id);
 
-        appRepository.delete(app);
+        applicationRepository.delete(app);
 
         log.info("App deleted: {}", app.getAppName());
     }
 
     // ================= VALIDATION =================
-    private void validateApp(AppEntity app) {
+    private void validateApp(ApplicationEntity app) {
 
         if (app.getAppName() == null || app.getAppName().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "App name required");

@@ -39,7 +39,6 @@ public class OtpServiceImpl implements OtpService {
         String email = user.getEmail().toLowerCase().trim();
         String otp = generateOtp();
 
-        // ✅ Invalidate previous OTP
         otpRepository.findTopByEmailAndPurposeOrderByCreatedAtDesc(email, "LOGIN")
                 .ifPresent(oldOtp -> {
                     oldOtp.setIsUsed(true);
@@ -57,7 +56,7 @@ public class OtpServiceImpl implements OtpService {
 
         otpRepository.save(entity);
 
-        log.info("LOGIN OTP generated for {}", email); // ❌ don't log OTP
+        log.info("LOGIN OTP generated for {}", email);
 
         return otp;
     }
@@ -67,35 +66,7 @@ public class OtpServiceImpl implements OtpService {
     @Transactional
     public void verifyLoginOtp(UserEntity user, String otp) {
 
-        String email = user.getEmail().toLowerCase().trim();
-
-        OtpVerification entity = otpRepository
-                .findTopByEmailAndPurposeOrderByCreatedAtDesc(email, "LOGIN")
-                .orElseThrow(() ->
-                        new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP not found"));
-
-        if (otp == null || otp.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP required");
-        }
-
-        if (!entity.getOtp().equals(otp)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid OTP");
-        }
-
-        if (entity.getExpiryTime() == null ||
-                entity.getExpiryTime().isBefore(LocalDateTime.now())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP expired");
-        }
-
-        if (Boolean.TRUE.equals(entity.getIsUsed())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP already used");
-        }
-
-        // ✅ MARK USED
-        entity.setIsUsed(true);
-        otpRepository.save(entity);
-
-        log.info("OTP verified for {}", email);
+        validateOtp(user, otp, "LOGIN");
     }
 
     // ================= REGISTER OTP =================
@@ -106,7 +77,6 @@ public class OtpServiceImpl implements OtpService {
         String email = user.getEmail().toLowerCase().trim();
         String otp = generateOtp();
 
-        // ✅ Invalidate previous REGISTER OTP
         otpRepository.findTopByEmailAndPurposeOrderByCreatedAtDesc(email, "REGISTER")
                 .ifPresent(oldOtp -> {
                     oldOtp.setIsUsed(true);
@@ -127,5 +97,46 @@ public class OtpServiceImpl implements OtpService {
         log.info("REGISTER OTP generated for {}", email);
 
         return otp;
+    }
+
+    // ================= VERIFY REGISTER OTP =================
+    @Override
+    @Transactional
+    public void verifyRegisterOtp(UserEntity user, String otp) {
+
+        validateOtp(user, otp, "REGISTER");
+    }
+
+    // ================= COMMON VALIDATION =================
+    private void validateOtp(UserEntity user, String otp, String purpose) {
+
+        String email = user.getEmail().toLowerCase().trim();
+
+        OtpVerification entity = otpRepository
+                .findTopByEmailAndPurposeOrderByCreatedAtDesc(email, purpose)
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP not found"));
+
+        if (otp == null || otp.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP required");
+        }
+
+        if (!entity.getOtp().equals(otp)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid OTP");
+        }
+
+        if (entity.getExpiryTime() == null ||
+                entity.getExpiryTime().isBefore(LocalDateTime.now())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP expired");
+        }
+
+        if (Boolean.TRUE.equals(entity.getIsUsed())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP already used");
+        }
+
+        entity.setIsUsed(true);
+        otpRepository.save(entity);
+
+        log.info("{} OTP verified for {}", purpose, email);
     }
 }

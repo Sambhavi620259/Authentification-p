@@ -1,10 +1,10 @@
 package in.bawvpl.Authify.service;
 
+import in.bawvpl.Authify.entity.ApplicationEntity;
 import in.bawvpl.Authify.entity.TransactionEntity;
 import in.bawvpl.Authify.entity.UserEntity;
-import in.bawvpl.Authify.entity.AppEntity; // 🔥🔥 IMPORTANT FIX
 
-import in.bawvpl.Authify.repository.AppRepository;
+import in.bawvpl.Authify.repository.ApplicationRepository;
 import in.bawvpl.Authify.repository.TransactionRepository;
 import in.bawvpl.Authify.repository.UserRepository;
 import in.bawvpl.Authify.repository.UserApplicationRepository;
@@ -12,6 +12,7 @@ import in.bawvpl.Authify.repository.UserApplicationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,7 +27,7 @@ public class PaymentService {
 
     private final TransactionRepository transactionRepository;
     private final UserRepository userRepository;
-    private final AppRepository appRepository;
+    private final ApplicationRepository applicationRepository;
     private final UserApplicationRepository userAppRepository;
 
     // ================= CREATE PAYMENT =================
@@ -55,7 +56,7 @@ public class PaymentService {
                         HttpStatus.NOT_FOUND, "User not found"));
 
         // ✅ APP
-        AppEntity app = appRepository.findById(appId)
+        ApplicationEntity app = applicationRepository.findById(appId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "App not found"));
 
@@ -67,14 +68,11 @@ public class PaymentService {
                 .paymentMethod(method)
                 .paymentSource(source)
                 .amount(amount)
-                .paymentStatus("PENDING")
+                .status("PENDING") // ✅ FIXED
+                .type("DEBIT")
                 .build();
 
-        TransactionEntity saved = transactionRepository.save(transaction);
-
-        log.info("Payment initiated for user [{}] app [{}]", email, appId);
-
-        return saved;
+        return transactionRepository.save(transaction);
     }
 
     // ================= GET USER PAYMENTS =================
@@ -87,7 +85,11 @@ public class PaymentService {
                         HttpStatus.NOT_FOUND, "User not found"));
 
         return transactionRepository
-                .findByUser_IdOrderByPaymentDateDesc(user.getId());
+                .findByUser_IdOrderByPaymentDateDesc(
+                        user.getId(),
+                        PageRequest.of(0, 10)
+                )
+                .getContent();
     }
 
     // ================= UPDATE STATUS =================
@@ -98,18 +100,18 @@ public class PaymentService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Transaction not found"));
 
-        tx.setPaymentStatus(status);
+        tx.setStatus(status); // ✅ FIXED
 
         // ✅ AUTO ACTIVATE APP
         if ("SUCCESS".equalsIgnoreCase(status)) {
 
             UserEntity user = tx.getUser();
-            AppEntity app = tx.getApp();
+            ApplicationEntity app = tx.getApp();
 
             userAppRepository.findByUser_IdAndApp_AppId(user.getId(), app.getAppId())
-                    .ifPresent(appEntity -> {
-                        appEntity.setSubscriptionStatus("ACTIVE");
-                        userAppRepository.save(appEntity);
+                    .ifPresent(userApp -> {
+                        userApp.setSubscriptionStatus("ACTIVE");
+                        userAppRepository.save(userApp);
                     });
 
             log.info("App activated for user [{}] app [{}]",

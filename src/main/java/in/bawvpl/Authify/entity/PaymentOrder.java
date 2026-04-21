@@ -35,7 +35,7 @@ public class PaymentOrder {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "app_id")
     @JsonIgnore
-    private AppEntity app;
+    private ApplicationEntity app;
 
     // ================= PAYMENT =================
     @Column(name = "order_id", nullable = false, unique = true, length = 100)

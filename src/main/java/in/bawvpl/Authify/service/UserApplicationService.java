@@ -1,9 +1,9 @@
 package in.bawvpl.Authify.service;
 
-import in.bawvpl.Authify.entity.AppEntity;
+import in.bawvpl.Authify.entity.ApplicationEntity;
 import in.bawvpl.Authify.entity.UserApplicationEntity;
 import in.bawvpl.Authify.entity.UserEntity;
-import in.bawvpl.Authify.repository.AppRepository;
+import in.bawvpl.Authify.repository.ApplicationRepository;
 import in.bawvpl.Authify.repository.UserApplicationRepository;
 import in.bawvpl.Authify.repository.UserRepository;
 
@@ -24,7 +24,7 @@ public class UserApplicationService {
 
     private final UserApplicationRepository userAppRepository;
     private final UserRepository userRepository;
-    private final AppRepository appRepository;
+    private final ApplicationRepository applicationRepository;
 
     private static final String STATUS_APPLIED = "APPLIED";
 
@@ -35,9 +35,8 @@ public class UserApplicationService {
         email = normalizeEmail(email);
 
         UserEntity user = getUserByEmail(email);
-        AppEntity app = getAppById(appId);
+        ApplicationEntity app = getAppById(appId);
 
-        // ✅ Duplicate check
         userAppRepository.findByUser_IdAndApp_AppId(user.getId(), appId)
                 .ifPresent(existing -> {
                     throw new ResponseStatusException(
@@ -67,20 +66,16 @@ public class UserApplicationService {
 
         UserEntity user = getUserByEmail(email);
 
-        UserApplicationEntity entity = userAppRepository
+        return userAppRepository
                 .findByUser_IdAndApp_AppId(user.getId(), appId)
                 .orElseThrow(() ->
                         new ResponseStatusException(HttpStatus.NOT_FOUND, "Application not found")
                 );
-
-        log.info("Fetched app [{}] for user [{}]", appId, email);
-
-        return entity;
     }
 
     // ================= GET ALL APPS =================
-    public List<AppEntity> getAllApps() {
-        return appRepository.findAll();
+    public List<ApplicationEntity> getAllApps() {
+        return applicationRepository.findAll();
     }
 
     // ================= GET USER APPLICATIONS =================
@@ -93,7 +88,7 @@ public class UserApplicationService {
         return userAppRepository.findAllByUser(user);
     }
 
-    // ================= HELPER METHODS =================
+    // ================= HELPERS =================
 
     private String normalizeEmail(String email) {
         if (email == null || email.isBlank()) {
@@ -109,8 +104,8 @@ public class UserApplicationService {
                 );
     }
 
-    private AppEntity getAppById(Long appId) {
-        return appRepository.findById(appId)
+    private ApplicationEntity getAppById(Long appId) {
+        return applicationRepository.findById(appId)
                 .orElseThrow(() ->
                         new ResponseStatusException(HttpStatus.NOT_FOUND, "App not found")
                 );

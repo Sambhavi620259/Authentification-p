@@ -26,7 +26,7 @@ public class SupportQuery {
     // ✅ APPLICATION
     @ManyToOne
     @JoinColumn(name = "app_id")
-    private AppEntity app;
+    private ApplicationEntity app;
 
     // ✅ ADMIN ID (simple for now)
     private Long attendedBy;

@@ -1,7 +1,9 @@
 package in.bawvpl.Authify.entity;
 
-import lombok.*;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
+import lombok.*;
+
 import java.time.Instant;
 
 @Entity
@@ -15,19 +17,31 @@ public class ActivityLog {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id")
     private Long id;
 
-    // user identifier (UUID or email)
-    @Column(nullable = false)
-    private String userId;
+    // ================= USER RELATION =================
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    @JsonIgnore
+    private UserEntity user;
 
+    // ================= ACTION =================
     @Column(nullable = false)
-    private String action; // e.g. "LOGIN", "PAYMENT_CREATED"
+    private String action; // LOGIN, PAYMENT_CREATED, etc.
 
-    @Column(name = "details")
-    private String details;
+    // ================= DESCRIPTION =================
+    @Column(name = "description")
+    private String description;
 
-    @Column(nullable = false)
+    // ================= TIMESTAMP =================
+    @Column(nullable = false, updatable = false)
     private Instant timestamp;
+
+    // ================= AUTO =================
+    @PrePersist
+    protected void onCreate() {
+        if (this.timestamp == null) {
+            this.timestamp = Instant.now();
+        }
+    }
 }

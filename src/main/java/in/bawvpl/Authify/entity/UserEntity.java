@@ -7,7 +7,13 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "users")
+@Table(
+        name = "users",
+        indexes = {
+                @Index(name = "idx_user_email", columnList = "email"),
+                @Index(name = "idx_user_userid", columnList = "user_id")
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -24,7 +30,6 @@ public class UserEntity {
     private String userId;
 
     // ================= BASIC DETAILS =================
-
     @Column(name = "entity_type")
     private String entityType;
 
@@ -37,24 +42,24 @@ public class UserEntity {
     @Column(unique = true, nullable = false)
     private String email;
 
-    @Column(name = "phone_number")
+    @Column(name = "phone_number", unique = true)
     private String phoneNumber;
 
     @Column(nullable = false)
     private String password;
 
-    // 🔥 FIXED (RENAMED FIELD)
+    // ================= ROLE =================
     @Column(name = "admin_role")
     private String role;
 
     // ================= USER STATUS =================
     @Builder.Default
-    @Column(name = "user_status")
+    @Column(name = "user_status", nullable = false)
     private String userStatus = "ACTIVE";
 
     // ================= EMAIL VERIFICATION =================
     @Builder.Default
-    @Column(name = "email_verified")
+    @Column(name = "email_verified", nullable = false)
     private Boolean emailVerified = false;
 
     @Column(name = "verification_token")
@@ -62,7 +67,7 @@ public class UserEntity {
 
     // ================= KYC =================
     @Builder.Default
-    @Column(name = "is_kyc_verified")
+    @Column(name = "is_kyc_verified", nullable = false)
     private Boolean isKycVerified = false;
 
     // ================= ADDRESS =================
@@ -86,16 +91,24 @@ public class UserEntity {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    // ================= AUTO TIMESTAMPS =================
+    // ================= AUTO =================
     @PrePersist
     public void prePersist() {
 
+        LocalDateTime now = LocalDateTime.now();
+
         if (this.createdAt == null) {
-            this.createdAt = LocalDateTime.now();
+            this.createdAt = now;
         }
 
-        this.updatedAt = LocalDateTime.now();
+        this.updatedAt = now;
 
+        // ✅ Normalize email
+        if (this.email != null) {
+            this.email = this.email.toLowerCase().trim();
+        }
+
+        // ✅ Defaults
         if (this.userStatus == null) {
             this.userStatus = "ACTIVE";
         }
@@ -108,14 +121,25 @@ public class UserEntity {
             this.isKycVerified = false;
         }
 
-        if (this.referralCode == null || this.referralCode.isEmpty()) {
+        // ✅ Generate referral code
+        if (this.referralCode == null || this.referralCode.isBlank()) {
             this.referralCode = generateReferralCode();
+        }
+
+        // ✅ Default role
+        if (this.role == null || this.role.isBlank()) {
+            this.role = "ROLE_USER";
         }
     }
 
     @PreUpdate
     public void preUpdate() {
         this.updatedAt = LocalDateTime.now();
+
+        // keep email normalized
+        if (this.email != null) {
+            this.email = this.email.toLowerCase().trim();
+        }
     }
 
     private String generateReferralCode() {
