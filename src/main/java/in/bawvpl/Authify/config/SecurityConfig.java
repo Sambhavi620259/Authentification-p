@@ -5,8 +5,10 @@ import lombok.RequiredArgsConstructor;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
 import org.springframework.http.HttpMethod;
 
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -20,6 +22,7 @@ import java.util.List;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity // ✅ IMPORTANT
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -40,7 +43,7 @@ public class SecurityConfig {
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
 
-                // ================= EXCEPTION HANDLING =================
+                // ================= EXCEPTION =================
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((req, res, ex1) -> {
                             res.setStatus(401);
@@ -54,10 +57,10 @@ public class SecurityConfig {
                         })
                 )
 
-                // ================= AUTH RULES =================
+                // ================= AUTH =================
                 .authorizeHttpRequests(auth -> auth
 
-                        // ✅ CORS preflight
+                        // ✅ Preflight
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
                         // ================= PUBLIC =================
@@ -76,14 +79,6 @@ public class SecurityConfig {
                                 "/v3/api-docs/**"
                         ).permitAll()
 
-                        // ================= USER =================
-                        .requestMatchers(
-                                "/api/v1.0/profile/**",
-                                "/api/v1.0/app/**",
-                                "/api/v1.0/cart/**",
-                                "/api/v1.0/payment/**"
-                        ).authenticated()
-
                         // ================= ADMIN =================
                         .requestMatchers(
                                 "/api/v1.0/admin/**",
@@ -92,8 +87,13 @@ public class SecurityConfig {
                                 "/api/v1.0/kyc/all"
                         ).hasRole("ADMIN")
 
-                        // ================= USER + ADMIN =================
+                        // ================= USER (AUTH REQUIRED) =================
                         .requestMatchers(
+                                "/api/v1.0/profile/**",
+                                "/api/v1.0/application/**",
+                                "/api/v1.0/cart/**",
+                                "/api/v1.0/payment/**",
+                                "/api/v1.0/dashboard/**",
                                 "/api/v1.0/kyc/**"
                         ).authenticated()
 
@@ -101,13 +101,13 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
 
-                // ================= JWT FILTER =================
+                // ================= JWT =================
                 .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
 
-    // ================= CORS CONFIG =================
+    // ================= CORS =================
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
 

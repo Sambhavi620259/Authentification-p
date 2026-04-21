@@ -2,6 +2,7 @@ package in.bawvpl.Authify.controller;
 
 import in.bawvpl.Authify.entity.KycEntity;
 import in.bawvpl.Authify.entity.UserEntity;
+import in.bawvpl.Authify.io.ApiResponse;
 import in.bawvpl.Authify.repository.KycRepository;
 import in.bawvpl.Authify.repository.UserRepository;
 
@@ -9,12 +10,13 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1.0/kyc")
@@ -30,57 +32,70 @@ public class KycController {
     private static final String VERIFIED = "VERIFIED";
     private static final String REJECTED = "REJECTED";
 
-    // ================= COMMON RESPONSE =================
-    private Map<String, Object> response(String message, Object data) {
-        return Map.of(
-                "message", message,
-                "data", data
-        );
-    }
-
-    // ================= GET ALL =================
+    // ================= GET ALL (ADMIN ONLY) =================
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/all")
     public ResponseEntity<?> getAllKyc() {
 
         List<KycEntity> list = kycRepository.findAll();
 
-        return ResponseEntity.ok(Map.of(
-                "message", "All KYC fetched",
-                "count", list.size(),
-                "data", list
-        ));
+        return ResponseEntity.ok(
+                ApiResponse.builder()
+                        .status(200)
+                        .message("All KYC fetched")
+                        .data(list)
+                        .build()
+        );
     }
 
-    // ================= GET PENDING =================
+    // ================= GET PENDING (ADMIN ONLY) =================
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/pending")
     public ResponseEntity<?> getPendingKyc() {
 
         List<KycEntity> list = kycRepository.findByStatusIgnoreCase(PENDING);
 
-        return ResponseEntity.ok(Map.of(
-                "message", "Pending KYC fetched",
-                "count", list.size(),
-                "data", list
-        ));
+        return ResponseEntity.ok(
+                ApiResponse.builder()
+                        .status(200)
+                        .message("Pending KYC fetched")
+                        .data(list)
+                        .build()
+        );
     }
 
-    // ================= GET USER KYC =================
-    @GetMapping("/{userId}")
-    public ResponseEntity<?> getUserKyc(@PathVariable String userId) {
+    // ================= GET MY KYC =================
+    @GetMapping("/me")
+    public ResponseEntity<?> getMyKyc(Authentication auth) {
 
-        KycEntity kyc = getKycOrThrow(userId);
+        String email = auth.getName();
 
-        return ResponseEntity.ok(response("KYC fetched", kyc));
+        UserEntity user = userRepository.findByEmail(email)
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        KycEntity kyc = kycRepository.findByUser(user)
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "KYC not found"));
+
+        return ResponseEntity.ok(
+                ApiResponse.builder()
+                        .status(200)
+                        .message("KYC fetched")
+                        .data(kyc)
+                        .build()
+        );
     }
 
-    // ================= VERIFY =================
+    // ================= VERIFY (ADMIN ONLY) =================
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/verify/{userId}")
     public ResponseEntity<?> verifyKyc(@PathVariable String userId) {
 
         log.info("VERIFY KYC for {}", userId);
 
         UserEntity user = getUserOrThrow(userId);
-        KycEntity kyc = getKycOrThrow(userId);
+        KycEntity kyc = getKycOrThrow(user);
 
         kyc.setStatus(VERIFIED);
         kyc.setCompleted(true);
@@ -89,21 +104,24 @@ public class KycController {
         user.setIsKycVerified(true);
         userRepository.save(user);
 
-        return ResponseEntity.ok(Map.of(
-                "message", "KYC VERIFIED",
-                "userId", userId,
-                "status", VERIFIED
-        ));
+        return ResponseEntity.ok(
+                ApiResponse.builder()
+                        .status(200)
+                        .message("KYC VERIFIED")
+                        .data(VERIFIED)
+                        .build()
+        );
     }
 
-    // ================= REJECT =================
+    // ================= REJECT (ADMIN ONLY) =================
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/reject/{userId}")
     public ResponseEntity<?> rejectKyc(@PathVariable String userId) {
 
         log.info("REJECT KYC for {}", userId);
 
         UserEntity user = getUserOrThrow(userId);
-        KycEntity kyc = getKycOrThrow(userId);
+        KycEntity kyc = getKycOrThrow(user);
 
         kyc.setStatus(REJECTED);
         kyc.setCompleted(false);
@@ -112,14 +130,16 @@ public class KycController {
         user.setIsKycVerified(false);
         userRepository.save(user);
 
-        return ResponseEntity.ok(Map.of(
-                "message", "KYC REJECTED",
-                "userId", userId,
-                "status", REJECTED
-        ));
+        return ResponseEntity.ok(
+                ApiResponse.builder()
+                        .status(200)
+                        .message("KYC REJECTED")
+                        .data(REJECTED)
+                        .build()
+        );
     }
 
-    // ================= HELPER METHODS =================
+    // ================= HELPERS =================
 
     private UserEntity getUserOrThrow(String userId) {
         return userRepository.findByUserId(userId)
@@ -127,10 +147,7 @@ public class KycController {
                         new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
     }
 
-    private KycEntity getKycOrThrow(String userId) {
-
-        UserEntity user = getUserOrThrow(userId);
-
+    private KycEntity getKycOrThrow(UserEntity user) {
         return kycRepository.findByUser(user)
                 .orElseThrow(() ->
                         new ResponseStatusException(HttpStatus.NOT_FOUND, "KYC not found"));

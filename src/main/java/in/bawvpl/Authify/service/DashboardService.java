@@ -1,18 +1,20 @@
 package in.bawvpl.Authify.service;
 
-import in.bawvpl.Authify.io.DashboardSummaryResponse;
-import in.bawvpl.Authify.io.NotificationResponse;
-import in.bawvpl.Authify.io.TransactionResponse;
-import in.bawvpl.Authify.io.ActivityResponse;
+import in.bawvpl.Authify.io.*;
+
 import org.springframework.data.domain.Page;
 
 public interface DashboardService {
 
-    DashboardSummaryResponse getSummary(Long userId);
+    // ================= SUMMARY =================
+    DashboardSummaryResponse getSummaryByEmail(String email);
 
-    Page<TransactionResponse> getTransactions(Long userId, int page, int size);
+    // ================= TRANSACTIONS =================
+    Page<TransactionResponse> getTransactionsByEmail(String email, int page, int size);
 
-    Page<NotificationResponse> getNotifications(Long userId, int page, int size);
+    // ================= NOTIFICATIONS =================
+    Page<NotificationResponse> getNotificationsByEmail(String email, int page, int size);
 
-    Page<ActivityResponse> getActivities(Long userId, int page, int size);
+    // ================= ACTIVITIES =================
+    Page<ActivityResponse> getActivitiesByEmail(String email, int page, int size);
 }

@@ -1,17 +1,17 @@
 package in.bawvpl.Authify.controller;
 
 import in.bawvpl.Authify.entity.ApplicationEntity;
+import in.bawvpl.Authify.io.ApiResponse;
 import in.bawvpl.Authify.service.AppService;
-
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1.0/application")
@@ -22,25 +22,20 @@ public class ApplicationController {
 
     private final AppService applicationService;
 
-    // ================= CREATE =================
+    // ================= CREATE (ADMIN ONLY) =================
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
     public ResponseEntity<?> create(@RequestBody ApplicationEntity app) {
 
-        try {
-            ApplicationEntity saved = applicationService.createApp(app);
+        ApplicationEntity saved = applicationService.createApp(app);
 
-            return ResponseEntity.ok(Map.of(
-                    "message", "App created",
-                    "data", saved
-            ));
-
-        } catch (Exception e) {
-            log.error("Create app error: {}", e.getMessage());
-
-            return ResponseEntity.badRequest().body(Map.of(
-                    "message", e.getMessage()
-            ));
-        }
+        return ResponseEntity.ok(
+                ApiResponse.builder()
+                        .status(200)
+                        .message("App created successfully")
+                        .data(saved)
+                        .build()
+        );
     }
 
     // ================= GET ALL =================
@@ -49,72 +44,62 @@ public class ApplicationController {
 
         List<ApplicationEntity> list = applicationService.getAllApps();
 
-        return ResponseEntity.ok(Map.of(
-                "message", "Apps fetched",
-                "data", list
-        ));
+        return ResponseEntity.ok(
+                ApiResponse.builder()
+                        .status(200)
+                        .message("Apps fetched")
+                        .data(list)
+                        .build()
+        );
     }
 
     // ================= GET ONE =================
     @GetMapping("/{id}")
     public ResponseEntity<?> one(@PathVariable Long id) {
 
-        try {
-            ApplicationEntity app = applicationService.getApp(id);
+        ApplicationEntity app = applicationService.getApp(id);
 
-            return ResponseEntity.ok(Map.of(
-                    "message", "App fetched",
-                    "data", app
-            ));
-
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of(
-                    "message", e.getMessage()
-            ));
-        }
+        return ResponseEntity.ok(
+                ApiResponse.builder()
+                        .status(200)
+                        .message("App fetched")
+                        .data(app)
+                        .build()
+        );
     }
 
-    // ================= UPDATE =================
+    // ================= UPDATE (ADMIN ONLY) =================
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{id}")
     public ResponseEntity<?> update(
             @PathVariable Long id,
             @RequestBody ApplicationEntity app
     ) {
 
-        try {
-            ApplicationEntity updated = applicationService.updateApp(id, app);
+        ApplicationEntity updated = applicationService.updateApp(id, app);
 
-            return ResponseEntity.ok(Map.of(
-                    "message", "App updated",
-                    "data", updated
-            ));
-
-        } catch (Exception e) {
-            log.error("Update app error: {}", e.getMessage());
-
-            return ResponseEntity.badRequest().body(Map.of(
-                    "message", e.getMessage()
-            ));
-        }
+        return ResponseEntity.ok(
+                ApiResponse.builder()
+                        .status(200)
+                        .message("App updated successfully")
+                        .data(updated)
+                        .build()
+        );
     }
 
-    // ================= DELETE =================
+    // ================= DELETE (ADMIN ONLY) =================
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     public ResponseEntity<?> delete(@PathVariable Long id) {
 
-        try {
-            applicationService.deleteApp(id);
+        applicationService.deleteApp(id);
 
-            return ResponseEntity.ok(Map.of(
-                    "message", "Deleted successfully"
-            ));
-
-        } catch (Exception e) {
-            log.error("Delete app error: {}", e.getMessage());
-
-            return ResponseEntity.badRequest().body(Map.of(
-                    "message", e.getMessage()
-            ));
-        }
+        return ResponseEntity.ok(
+                ApiResponse.builder()
+                        .status(200)
+                        .message("Deleted successfully")
+                        .data(null)
+                        .build()
+        );
     }
 }

@@ -5,6 +5,7 @@ import in.bawvpl.Authify.entity.*;
 import in.bawvpl.Authify.repository.*;
 
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 
@@ -22,12 +23,51 @@ public class DashboardServiceImpl implements DashboardService {
     private final KycRepository kycRepository;
     private final NotificationRepository notificationRepository;
     private final ActivityLogRepository activityLogRepository;
+    private final UserRepository userRepository; // ✅ ADD THIS
+
+    // ================= JWT BASED METHODS =================
 
     @Override
+    public DashboardSummaryResponse getSummaryByEmail(String email) {
+
+        UserEntity user = getUser(email);
+
+        return getSummary(user.getId());
+    }
+
+    @Override
+    public Page<TransactionResponse> getTransactionsByEmail(String email, int page, int size) {
+
+        UserEntity user = getUser(email);
+
+        return getTransactions(user.getId(), page, size);
+    }
+
+    @Override
+    public Page<NotificationResponse> getNotificationsByEmail(String email, int page, int size) {
+
+        UserEntity user = getUser(email);
+
+        return getNotifications(user.getId(), page, size);
+    }
+
+    @Override
+    public Page<ActivityResponse> getActivitiesByEmail(String email, int page, int size) {
+
+        UserEntity user = getUser(email);
+
+        return getActivities(user.getId(), page, size);
+    }
+
+    // ================= INTERNAL METHODS =================
+
     public DashboardSummaryResponse getSummary(Long userId) {
 
         List<TransactionEntity> transactions =
-                transactionRepository.findByUser_Id(userId, PageRequest.of(0, 100)).getContent();
+                transactionRepository
+                        .findByUser_IdOrderByPaymentDateDesc(userId, PageRequest.of(0, 100))
+                        .getContent();
+
         double totalSpent = transactions.stream()
                 .filter(t -> "DEBIT".equalsIgnoreCase(t.getType()))
                 .mapToDouble(TransactionEntity::getAmount)
@@ -57,7 +97,6 @@ public class DashboardServiceImpl implements DashboardService {
                 .build();
     }
 
-    @Override
     public Page<TransactionResponse> getTransactions(Long userId, int page, int size) {
 
         Pageable pageable = PageRequest.of(page, size);
@@ -72,7 +111,6 @@ public class DashboardServiceImpl implements DashboardService {
                         .build());
     }
 
-    @Override
     public Page<NotificationResponse> getNotifications(Long userId, int page, int size) {
 
         Pageable pageable = PageRequest.of(page, size);
@@ -87,7 +125,6 @@ public class DashboardServiceImpl implements DashboardService {
                         .build());
     }
 
-    @Override
     public Page<ActivityResponse> getActivities(Long userId, int page, int size) {
 
         Pageable pageable = PageRequest.of(page, size);
@@ -99,5 +136,12 @@ public class DashboardServiceImpl implements DashboardService {
                         .description(a.getDescription())
                         .timestamp(a.getTimestamp())
                         .build());
+    }
+
+    // ================= HELPER =================
+    private UserEntity getUser(String email) {
+
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
     }
 }
