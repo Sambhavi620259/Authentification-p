@@ -4,6 +4,10 @@ import in.bawvpl.Authify.io.*;
 
 import org.springframework.data.domain.Page;
 
+/**
+ * Dashboard Service (JWT-based)
+ * All methods derive user context from email (authenticated user)
+ */
 public interface DashboardService {
 
     // ================= SUMMARY =================

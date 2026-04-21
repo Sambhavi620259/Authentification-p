@@ -31,13 +31,13 @@ public class SubscriptionPlan {
 
     private String description;
 
-    // ✅ FIX: use BigDecimal (money safe)
+    // ✅ MONEY SAFE
     @Column(nullable = false)
     private BigDecimal price;
 
-    // ✅ BETTER CONTROL
+    // MONTHLY / YEARLY
     @Column(name = "billing_cycle", nullable = false)
-    private String billingCycle; // MONTHLY, YEARLY
+    private String billingCycle;
 
     // ================= STATUS =================
     @Builder.Default

@@ -22,7 +22,7 @@ import java.util.List;
 
 @Configuration
 @EnableWebSecurity
-@EnableMethodSecurity // ✅ IMPORTANT
+@EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -67,13 +67,10 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/",
                                 "/error",
-                                "/api/v1.0/register",
-                                "/api/v1.0/login",
-                                "/api/v1.0/login/verify-otp",
-                                "/api/v1.0/verify",
-                                "/api/v1.0/send-otp",
-                                "/api/v1.0/send-reset-otp",
-                                "/api/v1.0/reset-password",
+
+                                // 🔥 FIXED AUTH PATH
+                                "/api/v1.0/auth/**",
+
                                 "/uploads/**",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**"
@@ -87,7 +84,7 @@ public class SecurityConfig {
                                 "/api/v1.0/kyc/all"
                         ).hasRole("ADMIN")
 
-                        // ================= USER (AUTH REQUIRED) =================
+                        // ================= USER =================
                         .requestMatchers(
                                 "/api/v1.0/profile/**",
                                 "/api/v1.0/application/**",
@@ -101,7 +98,7 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
 
-                // ================= JWT =================
+                // ================= JWT FILTER =================
                 .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

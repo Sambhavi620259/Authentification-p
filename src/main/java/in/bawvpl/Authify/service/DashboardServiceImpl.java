@@ -5,14 +5,18 @@ import in.bawvpl.Authify.entity.*;
 import in.bawvpl.Authify.repository.*;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.data.domain.*;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class DashboardServiceImpl implements DashboardService {
 
     private final TransactionRepository transactionRepository;
@@ -23,12 +27,14 @@ public class DashboardServiceImpl implements DashboardService {
     private final KycRepository kycRepository;
     private final NotificationRepository notificationRepository;
     private final ActivityLogRepository activityLogRepository;
-    private final UserRepository userRepository; // ✅ ADD THIS
+    private final UserRepository userRepository;
 
     // ================= JWT BASED METHODS =================
 
     @Override
     public DashboardSummaryResponse getSummaryByEmail(String email) {
+
+        log.info("Fetching dashboard summary for {}", email);
 
         UserEntity user = getUser(email);
 
@@ -37,6 +43,8 @@ public class DashboardServiceImpl implements DashboardService {
 
     @Override
     public Page<TransactionResponse> getTransactionsByEmail(String email, int page, int size) {
+
+        log.info("Fetching transactions for {} | page={} size={}", email, page, size);
 
         UserEntity user = getUser(email);
 
@@ -63,9 +71,10 @@ public class DashboardServiceImpl implements DashboardService {
 
     public DashboardSummaryResponse getSummary(Long userId) {
 
+        Pageable pageable = PageRequest.of(0, 50, Sort.by("paymentDate").descending());
+
         List<TransactionEntity> transactions =
-                transactionRepository
-                        .findByUser_IdOrderByPaymentDateDesc(userId, PageRequest.of(0, 100))
+                transactionRepository.findByUser_IdOrderByPaymentDateDesc(userId, pageable)
                         .getContent();
 
         double totalSpent = transactions.stream()
@@ -82,7 +91,6 @@ public class DashboardServiceImpl implements DashboardService {
         Integer activeSubs = subscriptionRepository.countByUserIdAndStatus(userId, "ACTIVE");
         Double walletBalance = walletRepository.findBalanceByUserId(userId);
         Integer referrals = referralRepository.countByReferrerId(userId);
-
         String kycStatus = kycRepository.findStatusByUser_Id(userId);
 
         return DashboardSummaryResponse.builder()
@@ -99,7 +107,7 @@ public class DashboardServiceImpl implements DashboardService {
 
     public Page<TransactionResponse> getTransactions(Long userId, int page, int size) {
 
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable = PageRequest.of(page, size, Sort.by("paymentDate").descending());
 
         return transactionRepository
                 .findByUser_IdOrderByPaymentDateDesc(userId, pageable)
@@ -113,7 +121,7 @@ public class DashboardServiceImpl implements DashboardService {
 
     public Page<NotificationResponse> getNotifications(Long userId, int page, int size) {
 
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
 
         return notificationRepository
                 .findByUser_IdOrderByCreatedAtDesc(userId, pageable)
@@ -127,7 +135,7 @@ public class DashboardServiceImpl implements DashboardService {
 
     public Page<ActivityResponse> getActivities(Long userId, int page, int size) {
 
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable = PageRequest.of(page, size, Sort.by("timestamp").descending());
 
         return activityLogRepository
                 .findByUser_IdOrderByTimestampDesc(userId, pageable)
@@ -142,6 +150,7 @@ public class DashboardServiceImpl implements DashboardService {
     private UserEntity getUser(String email) {
 
         return userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
     }
 }

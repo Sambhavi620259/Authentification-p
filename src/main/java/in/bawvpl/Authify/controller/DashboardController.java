@@ -4,6 +4,7 @@ import in.bawvpl.Authify.io.*;
 import in.bawvpl.Authify.service.DashboardService;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
@@ -13,15 +14,22 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/v1.0/dashboard")
 @RequiredArgsConstructor
+@Slf4j
 public class DashboardController {
 
     private final DashboardService dashboardService;
 
     // ================= SUMMARY =================
     @GetMapping("/summary")
-    public ResponseEntity<?> getSummary(Authentication auth) {
+    public ResponseEntity<ApiResponse<DashboardSummaryResponse>> getSummary(Authentication auth) {
+
+        if (auth == null || auth.getName() == null) {
+            throw new RuntimeException("Unauthorized");
+        }
 
         String email = auth.getName();
+
+        log.info("Fetching dashboard summary for {}", email);
 
         DashboardSummaryResponse response =
                 dashboardService.getSummaryByEmail(email);
@@ -37,12 +45,18 @@ public class DashboardController {
 
     // ================= TRANSACTIONS =================
     @GetMapping("/transactions")
-    public ResponseEntity<?> getTransactions(
+    public ResponseEntity<ApiResponse<Page<TransactionResponse>>> getTransactions(
             Authentication auth,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
 
+        if (auth == null || auth.getName() == null) {
+            throw new RuntimeException("Unauthorized");
+        }
+
         String email = auth.getName();
+
+        log.info("Fetching transactions for {} | page={} size={}", email, page, size);
 
         Page<TransactionResponse> response =
                 dashboardService.getTransactionsByEmail(email, page, size);

@@ -19,7 +19,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.Arrays;
 
 @Component
 @RequiredArgsConstructor
@@ -28,28 +27,6 @@ public class JwtRequestFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
     private final UserDetailsService userDetailsService;
-
-    // ================= PUBLIC PATHS =================
-    private static final String[] PUBLIC_PATHS = {
-            "/",
-            "/error",
-
-            // AUTH
-            "/api/v1.0/register",
-            "/api/v1.0/login",
-            "/api/v1.0/login/verify-otp",
-            "/api/v1.0/verify",
-            "/api/v1.0/send-otp",
-            "/api/v1.0/send-reset-otp",
-            "/api/v1.0/reset-password",
-
-            // FILES
-            "/uploads",
-
-            // SWAGGER
-            "/swagger-ui",
-            "/v3/api-docs"
-    };
 
     // ================= SKIP FILTER =================
     @Override
@@ -62,8 +39,13 @@ public class JwtRequestFilter extends OncePerRequestFilter {
             return true;
         }
 
-        return Arrays.stream(PUBLIC_PATHS)
-                .anyMatch(p -> path.equals(p) || path.startsWith(p + "/"));
+        // ✅ PUBLIC ENDPOINTS (FIXED)
+        return path.startsWith("/api/v1.0/auth/")
+                || path.startsWith("/uploads/")
+                || path.startsWith("/swagger-ui/")
+                || path.startsWith("/v3/api-docs/")
+                || path.equals("/")
+                || path.equals("/error");
     }
 
     // ================= MAIN FILTER =================
@@ -84,19 +66,19 @@ public class JwtRequestFilter extends OncePerRequestFilter {
                 return;
             }
 
-            String jwt = authHeader.substring(7).trim();
+            final String jwt = authHeader.substring(7).trim();
 
             if (jwt.isEmpty()) {
                 filterChain.doFilter(request, response);
                 return;
             }
 
-            String username = null;
+            String username;
 
             try {
                 username = jwtUtil.extractUsername(jwt);
             } catch (Exception e) {
-                log.warn("JWT parsing failed: {}", e.getMessage());
+                log.warn("Invalid JWT token: {}", e.getMessage());
                 filterChain.doFilter(request, response);
                 return;
             }
@@ -123,10 +105,10 @@ public class JwtRequestFilter extends OncePerRequestFilter {
 
                     SecurityContextHolder.getContext().setAuthentication(auth);
 
-                    log.debug("JWT authenticated: {}", username);
+                    log.debug("Authenticated user: {}", username);
 
                 } else {
-                    log.warn("Invalid JWT token for user: {}", username);
+                    log.warn("JWT validation failed for user: {}", username);
                 }
             }
 

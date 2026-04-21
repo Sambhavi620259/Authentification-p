@@ -27,5 +27,9 @@ import java.time.LocalDateTime;
         @ManyToOne(fetch = FetchType.LAZY)
         @JoinColumn(name = "user_id")
         private UserEntity user;
+
+        @ManyToOne
+        @JoinColumn(name = "plan_id")
+        private SubscriptionPlan plan;
     }
 
