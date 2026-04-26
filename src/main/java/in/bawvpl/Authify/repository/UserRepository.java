@@ -11,31 +11,31 @@ public interface UserRepository extends JpaRepository<UserEntity, Long> {
 
     // ================= AUTH =================
 
-    // Find by email (LOGIN)
+    // ✅ OLD METHODS (KEEP THESE — REQUIRED FOR YOUR CODE)
     Optional<UserEntity> findByEmail(String email);
 
-    // Check email exists
     boolean existsByEmail(String email);
+
+    // ✅ NEW METHODS (FOR FUTURE / SAFE USE)
+    Optional<UserEntity> findByEmailIgnoreCase(String email);
+
+    boolean existsByEmailIgnoreCase(String email);
 
     // ================= PHONE =================
 
-    // Phone validation
     boolean existsByPhoneNumber(String phoneNumber);
 
     Optional<UserEntity> findByPhoneNumber(String phoneNumber);
 
     // ================= USER =================
 
-    // REQUIRED for KYC Controller
     Optional<UserEntity> findByUserId(String userId);
 
     // ================= EMAIL VERIFICATION =================
 
-    // Find user by verification token
     Optional<UserEntity> findByVerificationToken(String verificationToken);
 
     // ================= REFERRAL =================
 
-    // Find user by referral code
     Optional<UserEntity> findByReferralCode(String referralCode);
 }

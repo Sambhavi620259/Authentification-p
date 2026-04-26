@@ -6,19 +6,29 @@ import org.springframework.data.domain.Page;
 
 /**
  * Dashboard Service (JWT-based)
- * All methods derive user context from email (authenticated user)
+ *
+ * All methods operate using authenticated user's email
+ * extracted from JWT (Authentication context).
  */
 public interface DashboardService {
 
-    // ================= SUMMARY =================
+    /**
+     * Fetch dashboard summary for logged-in user
+     */
     DashboardSummaryResponse getSummaryByEmail(String email);
 
-    // ================= TRANSACTIONS =================
+    /**
+     * Fetch paginated transactions
+     */
     Page<TransactionResponse> getTransactionsByEmail(String email, int page, int size);
 
-    // ================= NOTIFICATIONS =================
+    /**
+     * Fetch paginated notifications
+     */
     Page<NotificationResponse> getNotificationsByEmail(String email, int page, int size);
 
-    // ================= ACTIVITIES =================
+    /**
+     * Fetch paginated activity logs
+     */
     Page<ActivityResponse> getActivitiesByEmail(String email, int page, int size);
 }

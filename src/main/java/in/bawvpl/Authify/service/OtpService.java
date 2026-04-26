@@ -10,7 +10,7 @@ public interface OtpService {
 
     // REGISTER OTP
     String generateRegisterOtp(UserEntity user);
-    void verifyRegisterOtp(UserEntity user, String otp); // ✅ ADD THIS
+    void verifyRegisterOtp(UserEntity user, String otp);
 
     // GENERIC OTP
     String generateOtp();

@@ -1,11 +1,12 @@
 package in.bawvpl.Authify.repository;
 
 import in.bawvpl.Authify.entity.ReferralEntity;
-import org.springframework.data.jpa.repository.*;
-import org.springframework.data.repository.query.Param;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
 
+@Repository
 public interface ReferralRepository extends JpaRepository<ReferralEntity, Long> {
 
-    @Query("SELECT COUNT(r) FROM ReferralEntity r WHERE r.referrer.id = :userId")
-    Integer countByReferrerId(@Param("userId") Long userId);
+    // ✅ Safe + consistent (never null)
+    long countByReferrer_Id(Long userId);
 }

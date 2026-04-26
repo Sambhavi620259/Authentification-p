@@ -10,9 +10,9 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface TransactionRepository extends JpaRepository<TransactionEntity, Long> {
 
-    // ================= BASIC =================
-    Page<TransactionEntity> findByUser_Id(Long userId, Pageable pageable);
-
-    // ================= DASHBOARD (IMPORTANT) =================
+    // ✅ Sorted transactions (USED in dashboard)
     Page<TransactionEntity> findByUser_IdOrderByPaymentDateDesc(Long userId, Pageable pageable);
+
+    // ✅ Optional: total transaction count (useful for analytics)
+    long countByUser_Id(Long userId);
 }

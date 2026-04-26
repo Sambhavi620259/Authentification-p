@@ -21,27 +21,43 @@ public class EmailService {
 
     // ================= COMMON EMAIL SENDER =================
     private void sendHtmlEmail(String to, String subject, String htmlContent) {
+
+        if (to == null || to.isBlank()) {
+            log.error("❌ Email not sent: recipient is empty");
+            return;
+        }
+
         try {
+            log.info("📧 Attempting to send email to {}", to);
+
             MimeMessage msg = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(msg, true, "utf-8");
+            MimeMessageHelper helper = new MimeMessageHelper(msg, true, "UTF-8");
 
             helper.setTo(to);
-            helper.setFrom(from);
+
+            // 🔥 IMPORTANT FIX (better deliverability)
+            helper.setFrom("Authify <" + from + ">");
+
             helper.setSubject(subject);
             helper.setText(htmlContent, true);
 
             mailSender.send(msg);
 
-            log.info("Email sent to {}", to);
+            log.info("✅ Email successfully sent to {}", to);
 
         } catch (Exception e) {
-            log.error("Email failed", e);
-            throw new RuntimeException("Email sending failed");
+            log.error("❌ Email sending failed for {}", to, e);
+            // ❌ DO NOT throw (avoid breaking registration)
         }
     }
 
     // ================= OTP EMAIL =================
     private void sendOtpEmail(String to, String subject, String otp) {
+
+        if (otp == null || otp.isBlank()) {
+            log.error("❌ OTP is empty, email not sent");
+            return;
+        }
 
         String html = """
                 <div style="font-family:Arial, sans-serif;">
@@ -65,6 +81,11 @@ public class EmailService {
     // ================= EMAIL VERIFICATION LINK =================
     public void sendVerificationEmail(String to, String verificationLink) {
 
+        if (verificationLink == null || verificationLink.isBlank()) {
+            log.error("❌ Verification link is empty");
+            return;
+        }
+
         String html = """
                 <div style="font-family: Arial, sans-serif; line-height:1.6;">
 
@@ -74,7 +95,6 @@ public class EmailService {
 
                     <p>Please click the button below to verify your email:</p>
 
-                    <!-- BUTTON -->
                     <a href="%s" style="
                         display:inline-block;
                         padding:12px 24px;
@@ -90,23 +110,12 @@ public class EmailService {
 
                     <br/><br/>
 
-                    <!-- BACKUP LINK -->
                     <p>If the button does not work, click the link below:</p>
 
                     <p>
                         <a href="%s" style="color:#2e6cff; word-break: break-all;">
                             %s
                         </a>
-                    </p>
-
-                    <br/>
-
-                    <p style="color:#888;">
-                        This link may expire after some time.
-                    </p>
-
-                    <p style="color:#888;">
-                        If you did not register, please ignore this email.
                     </p>
 
                 </div>

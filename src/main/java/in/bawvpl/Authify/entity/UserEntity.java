@@ -39,7 +39,7 @@ public class UserEntity {
     @Column(name = "contact_person")
     private String contactPerson;
 
-    @Column(unique = true, nullable = false)
+    @Column(nullable = false, unique = true)
     private String email;
 
     @Column(name = "phone_number", unique = true)
@@ -49,7 +49,7 @@ public class UserEntity {
     private String password;
 
     // ================= ROLE =================
-    @Column(name = "admin_role")
+    @Column(name = "admin_role", nullable = false)
     private String role;
 
     // ================= USER STATUS =================
@@ -74,7 +74,7 @@ public class UserEntity {
     private String address;
 
     // ================= REFERRAL =================
-    @Column(name = "referral_code", unique = true)
+    @Column(name = "referral_code", unique = true, nullable = false)
     private String referralCode;
 
     @Column(name = "referred_by")
@@ -85,10 +85,10 @@ public class UserEntity {
     private String photoUrl;
 
     // ================= TIMESTAMPS =================
-    @Column(name = "created_at", updatable = false)
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    @Column(name = "updated_at")
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
     // ================= AUTO =================
@@ -97,6 +97,12 @@ public class UserEntity {
 
         LocalDateTime now = LocalDateTime.now();
 
+        // ✅ Generate userId if missing
+        if (this.userId == null || this.userId.isBlank()) {
+            this.userId = generateUserId();
+        }
+
+        // ✅ timestamps
         if (this.createdAt == null) {
             this.createdAt = now;
         }
@@ -121,25 +127,30 @@ public class UserEntity {
             this.isKycVerified = false;
         }
 
-        // ✅ Generate referral code
-        if (this.referralCode == null || this.referralCode.isBlank()) {
-            this.referralCode = generateReferralCode();
-        }
-
-        // ✅ Default role
         if (this.role == null || this.role.isBlank()) {
             this.role = "ROLE_USER";
+        }
+
+        // ✅ Referral Code
+        if (this.referralCode == null || this.referralCode.isBlank()) {
+            this.referralCode = generateReferralCode();
         }
     }
 
     @PreUpdate
     public void preUpdate() {
+
         this.updatedAt = LocalDateTime.now();
 
-        // keep email normalized
         if (this.email != null) {
             this.email = this.email.toLowerCase().trim();
         }
+    }
+
+    // ================= HELPERS =================
+
+    private String generateUserId() {
+        return "USR" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
     }
 
     private String generateReferralCode() {

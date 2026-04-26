@@ -9,12 +9,9 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface NotificationRepository extends JpaRepository<NotificationEntity, Long> {
 
-    // ================= DASHBOARD =================
-    Page<NotificationEntity> findByUser_Id(Long userId, Pageable pageable);
-
-    // ================= SORTED (BEST PRACTICE) =================
+    // ✅ Sorted notifications (USED in dashboard)
     Page<NotificationEntity> findByUser_IdOrderByCreatedAtDesc(Long userId, Pageable pageable);
 
-    // ================= OPTIONAL HELPERS =================
+    // ✅ Count unread notifications
     long countByUser_IdAndReadFalse(Long userId);
 }

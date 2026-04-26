@@ -33,14 +33,16 @@ public class JwtRequestFilter extends OncePerRequestFilter {
     protected boolean shouldNotFilter(HttpServletRequest request) {
 
         String path = request.getRequestURI();
+        String method = request.getMethod();
 
-        // ✅ Allow CORS preflight
-        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+        if ("OPTIONS".equalsIgnoreCase(method)) {
             return true;
         }
 
-        // ✅ PUBLIC ENDPOINTS (FIXED)
-        return path.startsWith("/api/v1.0/auth/")
+        return path.startsWith("/api/v1.0/login")
+                || path.startsWith("/api/v1.0/register")
+                || path.startsWith("/api/v1.0/login/verify-otp")
+                || path.startsWith("/api/v1.0/verify")
                 || path.startsWith("/uploads/")
                 || path.startsWith("/swagger-ui/")
                 || path.startsWith("/v3/api-docs/")
@@ -60,7 +62,6 @@ public class JwtRequestFilter extends OncePerRequestFilter {
 
             final String authHeader = request.getHeader("Authorization");
 
-            // ✅ No token → continue
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {
                 filterChain.doFilter(request, response);
                 return;
@@ -68,7 +69,7 @@ public class JwtRequestFilter extends OncePerRequestFilter {
 
             final String jwt = authHeader.substring(7).trim();
 
-            if (jwt.isEmpty()) {
+            if (jwt.isBlank()) {
                 filterChain.doFilter(request, response);
                 return;
             }
@@ -78,7 +79,7 @@ public class JwtRequestFilter extends OncePerRequestFilter {
             try {
                 username = jwtUtil.extractUsername(jwt);
             } catch (Exception e) {
-                log.warn("Invalid JWT token: {}", e.getMessage());
+                log.warn("❌ Invalid JWT token: {}", e.getMessage());
                 filterChain.doFilter(request, response);
                 return;
             }
@@ -90,6 +91,7 @@ public class JwtRequestFilter extends OncePerRequestFilter {
                 UserDetails userDetails =
                         userDetailsService.loadUserByUsername(username);
 
+                // ✅ FIX HERE
                 if (jwtUtil.validateToken(jwt, userDetails.getUsername())) {
 
                     UsernamePasswordAuthenticationToken auth =
@@ -105,18 +107,17 @@ public class JwtRequestFilter extends OncePerRequestFilter {
 
                     SecurityContextHolder.getContext().setAuthentication(auth);
 
-                    log.debug("Authenticated user: {}", username);
+                    log.debug("✅ Authenticated user: {}", username);
 
                 } else {
-                    log.warn("JWT validation failed for user: {}", username);
+                    log.warn("❌ JWT validation failed for user: {}", username);
                 }
             }
 
         } catch (Exception ex) {
-            log.error("JWT filter error: {}", ex.getMessage());
+            log.error("❌ JWT filter error: {}", ex.getMessage());
         }
 
-        // ✅ Always continue filter chain
         filterChain.doFilter(request, response);
     }
 }

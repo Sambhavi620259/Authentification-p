@@ -10,6 +10,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 @RestController
 @RequestMapping("/api/v1.0/dashboard")
@@ -23,13 +25,14 @@ public class DashboardController {
     @GetMapping("/summary")
     public ResponseEntity<ApiResponse<DashboardSummaryResponse>> getSummary(Authentication auth) {
 
+        // ✅ SAFE AUTH CHECK
         if (auth == null || auth.getName() == null) {
-            throw new RuntimeException("Unauthorized");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
         }
 
         String email = auth.getName();
 
-        log.info("Fetching dashboard summary for {}", email);
+        log.info("📊 Fetching dashboard summary for {}", email);
 
         DashboardSummaryResponse response =
                 dashboardService.getSummaryByEmail(email);
@@ -50,13 +53,14 @@ public class DashboardController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
 
+        // ✅ SAFE AUTH CHECK
         if (auth == null || auth.getName() == null) {
-            throw new RuntimeException("Unauthorized");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
         }
 
         String email = auth.getName();
 
-        log.info("Fetching transactions for {} | page={} size={}", email, page, size);
+        log.info("💰 Fetching transactions for {} | page={} size={}", email, page, size);
 
         Page<TransactionResponse> response =
                 dashboardService.getTransactionsByEmail(email, page, size);
@@ -64,8 +68,8 @@ public class DashboardController {
         return ResponseEntity.ok(
                 ApiResponse.<Page<TransactionResponse>>builder()
                         .status(200)
-                        .message("Transactions fetched")
-                        .data(response)
+                        .message("Transactions fetched") // ✅ REQUIRED FORMAT
+                        .data(response) // ✅ RETURN FULL PAGE (IMPORTANT)
                         .build()
         );
     }

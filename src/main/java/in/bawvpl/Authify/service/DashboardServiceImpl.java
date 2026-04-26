@@ -29,116 +29,145 @@ public class DashboardServiceImpl implements DashboardService {
     private final ActivityLogRepository activityLogRepository;
     private final UserRepository userRepository;
 
-    // ================= JWT BASED METHODS =================
+    // ================= SUMMARY =================
 
     @Override
     public DashboardSummaryResponse getSummaryByEmail(String email) {
 
-        log.info("Fetching dashboard summary for {}", email);
+        log.info("📊 Fetching dashboard summary for {}", email);
 
         UserEntity user = getUser(email);
 
         return getSummary(user.getId());
     }
 
+    private DashboardSummaryResponse getSummary(Long userId) {
+
+        try {
+
+            // ✅ SAFE pageable
+            Pageable pageable = PageRequest.of(0, 50);
+
+            Page<TransactionEntity> txPage =
+                    transactionRepository.findByUser_IdOrderByPaymentDateDesc(userId, pageable);
+
+            List<TransactionEntity> transactions =
+                    (txPage != null) ? txPage.getContent() : List.of();
+
+            // ================= CALCULATIONS =================
+
+            double totalSpent = transactions.stream()
+                    .filter(t -> "DEBIT".equalsIgnoreCase(t.getType()))
+                    .mapToDouble(t -> t.getAmount() != null ? t.getAmount() : 0.0)
+                    .sum();
+
+            double totalReceived = transactions.stream()
+                    .filter(t -> "CREDIT".equalsIgnoreCase(t.getType()))
+                    .mapToDouble(t -> t.getAmount() != null ? t.getAmount() : 0.0)
+                    .sum();
+
+            // ================= COUNTS =================
+
+            long totalApps = applicationRepository.countByUser_Id(userId);
+            long activeSubs = subscriptionRepository
+                    .countByUser_IdAndStatusIgnoreCase(userId, "ACTIVE");
+            long referrals = referralRepository.countByReferrer_Id(userId);
+
+            Double walletBalance = walletRepository.findByUser_Id(userId)
+                    .map(WalletEntity::getBalance)
+                    .orElse(0.0);
+
+            String kycStatus = kycRepository.findByUser_Id(userId)
+                    .map(KycEntity::getStatus)
+                    .filter(s -> s != null && !s.isBlank())
+                    .orElse("PENDING");
+
+            // ================= RESPONSE =================
+
+            return DashboardSummaryResponse.builder()
+                    .totalApps((int) totalApps)
+                    .activeSubscriptions((int) activeSubs)
+                    .walletBalance(walletBalance)
+                    .totalTransactions(transactions.size())
+                    .referralCount((int) referrals)
+                    .kycStatus(kycStatus)
+                    .totalSpent(totalSpent)
+                    .totalReceived(totalReceived)
+                    .build();
+
+        } catch (Exception e) {
+
+            // 🔥 CRITICAL DEBUG (DO NOT REMOVE)
+            e.printStackTrace();
+
+            log.error("❌ Dashboard error: ", e);
+
+            throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    e.getMessage()
+            );
+        }
+    }
+
+    // ================= TRANSACTIONS =================
+
     @Override
     public Page<TransactionResponse> getTransactionsByEmail(String email, int page, int size) {
 
-        log.info("Fetching transactions for {} | page={} size={}", email, page, size);
-
         UserEntity user = getUser(email);
 
-        return getTransactions(user.getId(), page, size);
+        // ✅ Pagination + Limit + Sorting (POINT 3 FIXED)
+        Pageable pageable = PageRequest.of(
+                page,
+                Math.min(size, 50), // 🔥 MAX SIZE = 50
+                Sort.by("paymentDate").descending() // 🔥 DEFAULT SORTING
+        );
+
+        return transactionRepository
+                .findByUser_IdOrderByPaymentDateDesc(user.getId(), pageable)
+                .map(tx -> TransactionResponse.builder()
+                        .id(tx.getId())
+                        .amount(tx.getAmount())
+                        .type(tx.getType())
+                        .status(tx.getStatus())
+                        .paymentDate(tx.getPaymentDate())
+                        .paymentMethod(tx.getPaymentMethod())
+                        .paymentSource(tx.getPaymentSource())
+                        .paymentDescription(tx.getPaymentDescription())
+                        .build()
+                );
     }
+
+    // ================= NOTIFICATIONS =================
 
     @Override
     public Page<NotificationResponse> getNotificationsByEmail(String email, int page, int size) {
 
         UserEntity user = getUser(email);
 
-        return getNotifications(user.getId(), page, size);
+        Pageable pageable = PageRequest.of(page, size);
+
+        return notificationRepository
+                .findByUser_IdOrderByCreatedAtDesc(user.getId(), pageable)
+                .map(n -> NotificationResponse.builder()
+                        .title(n.getTitle())
+                        .message(n.getMessage())
+                        .read(n.getRead())
+                        .createdAt(n.getCreatedAt())
+                        .build());
     }
+
+    // ================= ACTIVITIES =================
 
     @Override
     public Page<ActivityResponse> getActivitiesByEmail(String email, int page, int size) {
 
         UserEntity user = getUser(email);
 
-        return getActivities(user.getId(), page, size);
-    }
-
-    // ================= INTERNAL METHODS =================
-
-    public DashboardSummaryResponse getSummary(Long userId) {
-
-        Pageable pageable = PageRequest.of(0, 50, Sort.by("paymentDate").descending());
-
-        List<TransactionEntity> transactions =
-                transactionRepository.findByUser_IdOrderByPaymentDateDesc(userId, pageable)
-                        .getContent();
-
-        double totalSpent = transactions.stream()
-                .filter(t -> "DEBIT".equalsIgnoreCase(t.getType()))
-                .mapToDouble(TransactionEntity::getAmount)
-                .sum();
-
-        double totalReceived = transactions.stream()
-                .filter(t -> "CREDIT".equalsIgnoreCase(t.getType()))
-                .mapToDouble(TransactionEntity::getAmount)
-                .sum();
-
-        Integer totalApps = applicationRepository.countByUserId(userId);
-        Integer activeSubs = subscriptionRepository.countByUserIdAndStatus(userId, "ACTIVE");
-        Double walletBalance = walletRepository.findBalanceByUserId(userId);
-        Integer referrals = referralRepository.countByReferrerId(userId);
-        String kycStatus = kycRepository.findStatusByUser_Id(userId);
-
-        return DashboardSummaryResponse.builder()
-                .totalApps(totalApps != null ? totalApps : 0)
-                .activeSubscriptions(activeSubs != null ? activeSubs : 0)
-                .walletBalance(walletBalance != null ? walletBalance : 0.0)
-                .totalTransactions(transactions.size())
-                .referralCount(referrals != null ? referrals : 0)
-                .kycStatus(kycStatus != null ? kycStatus : "PENDING")
-                .totalSpent(totalSpent)
-                .totalReceived(totalReceived)
-                .build();
-    }
-
-    public Page<TransactionResponse> getTransactions(Long userId, int page, int size) {
-
-        Pageable pageable = PageRequest.of(page, size, Sort.by("paymentDate").descending());
-
-        return transactionRepository
-                .findByUser_IdOrderByPaymentDateDesc(userId, pageable)
-                .map(tx -> TransactionResponse.builder()
-                        .amount(tx.getAmount())
-                        .status(tx.getStatus())
-                        .type(tx.getType())
-                        .date(tx.getPaymentDate())
-                        .build());
-    }
-
-    public Page<NotificationResponse> getNotifications(Long userId, int page, int size) {
-
-        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-
-        return notificationRepository
-                .findByUser_IdOrderByCreatedAtDesc(userId, pageable)
-                .map(n -> NotificationResponse.builder()
-                        .title(n.getTitle())
-                        .message(n.getMessage())
-                        .read(n.isRead())
-                        .createdAt(n.getCreatedAt())
-                        .build());
-    }
-
-    public Page<ActivityResponse> getActivities(Long userId, int page, int size) {
-
-        Pageable pageable = PageRequest.of(page, size, Sort.by("timestamp").descending());
+        Pageable pageable = PageRequest.of(page, size);
 
         return activityLogRepository
-                .findByUser_IdOrderByTimestampDesc(userId, pageable)
+                .findByUser_IdOrderByTimestampDesc(user.getId(), pageable)
                 .map(a -> ActivityResponse.builder()
                         .action(a.getAction())
                         .description(a.getDescription())
@@ -147,6 +176,7 @@ public class DashboardServiceImpl implements DashboardService {
     }
 
     // ================= HELPER =================
+
     private UserEntity getUser(String email) {
 
         return userRepository.findByEmail(email)

@@ -2,10 +2,11 @@ package in.bawvpl.Authify.repository;
 
 import in.bawvpl.Authify.entity.SubscriptionEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
+import org.springframework.stereotype.Repository;
 
+@Repository
 public interface SubscriptionRepository extends JpaRepository<SubscriptionEntity, Long> {
 
-    @Query("SELECT COUNT(s) FROM SubscriptionEntity s WHERE s.user.id = :userId AND s.status = :status")
-    Integer countByUserIdAndStatus(Long userId, String status);
+    // ✅ Safe + best practice (never null)
+    long countByUser_IdAndStatusIgnoreCase(Long userId, String status);
 }

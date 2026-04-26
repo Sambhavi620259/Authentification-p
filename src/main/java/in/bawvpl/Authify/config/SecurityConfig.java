@@ -18,6 +18,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 import org.springframework.web.cors.*;
 
+import jakarta.servlet.http.HttpServletResponse; // 🔥 FIX
+
 import java.util.List;
 
 @Configuration
@@ -32,51 +34,42 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
         http
-                // ================= CORS =================
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-
-                // ================= CSRF =================
                 .csrf(csrf -> csrf.disable())
 
-                // ================= SESSION =================
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
 
-                // ================= EXCEPTION =================
                 .exceptionHandling(ex -> ex
-                        .authenticationEntryPoint((req, res, ex1) -> {
-                            res.setStatus(401);
+                        .authenticationEntryPoint((req, res, e) -> {
+                            res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                             res.setContentType("application/json");
                             res.getWriter().write("{\"message\":\"Unauthorized\"}");
                         })
-                        .accessDeniedHandler((req, res, ex2) -> {
-                            res.setStatus(403);
+                        .accessDeniedHandler((req, res, e) -> {
+                            res.setStatus(HttpServletResponse.SC_FORBIDDEN);
                             res.setContentType("application/json");
                             res.getWriter().write("{\"message\":\"Forbidden\"}");
                         })
                 )
 
-                // ================= AUTH =================
                 .authorizeHttpRequests(auth -> auth
 
-                        // ✅ Preflight
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        // ================= PUBLIC =================
                         .requestMatchers(
                                 "/",
                                 "/error",
-
-                                // 🔥 FIXED AUTH PATH
-                                "/api/v1.0/auth/**",
-
+                                "/api/v1.0/register",
+                                "/api/v1.0/login",
+                                "/api/v1.0/login/verify-otp",
+                                "/api/v1.0/verify",
                                 "/uploads/**",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**"
                         ).permitAll()
 
-                        // ================= ADMIN =================
                         .requestMatchers(
                                 "/api/v1.0/admin/**",
                                 "/api/v1.0/kyc/verify/**",
@@ -84,7 +77,6 @@ public class SecurityConfig {
                                 "/api/v1.0/kyc/all"
                         ).hasRole("ADMIN")
 
-                        // ================= USER =================
                         .requestMatchers(
                                 "/api/v1.0/profile/**",
                                 "/api/v1.0/application/**",
@@ -94,17 +86,14 @@ public class SecurityConfig {
                                 "/api/v1.0/kyc/**"
                         ).authenticated()
 
-                        // ================= FALLBACK =================
                         .anyRequest().authenticated()
                 )
 
-                // ================= JWT FILTER =================
                 .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
 
-    // ================= CORS =================
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
 

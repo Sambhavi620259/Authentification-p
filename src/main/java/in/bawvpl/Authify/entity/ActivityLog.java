@@ -7,7 +7,13 @@ import lombok.*;
 import java.time.Instant;
 
 @Entity
-@Table(name = "activity_logs")
+@Table(
+        name = "activity_logs",
+        indexes = {
+                @Index(name = "idx_activity_user", columnList = "user_id"),
+                @Index(name = "idx_activity_timestamp", columnList = "timestamp")
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -20,17 +26,17 @@ public class ActivityLog {
     private Long id;
 
     // ================= USER RELATION =================
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     @JsonIgnore
     private UserEntity user;
 
     // ================= ACTION =================
-    @Column(nullable = false)
+    @Column(nullable = false, length = 100)
     private String action; // LOGIN, PAYMENT_CREATED, etc.
 
     // ================= DESCRIPTION =================
-    @Column(name = "description")
+    @Column(name = "description", length = 500)
     private String description;
 
     // ================= TIMESTAMP =================
@@ -40,6 +46,7 @@ public class ActivityLog {
     // ================= AUTO =================
     @PrePersist
     protected void onCreate() {
+
         if (this.timestamp == null) {
             this.timestamp = Instant.now();
         }

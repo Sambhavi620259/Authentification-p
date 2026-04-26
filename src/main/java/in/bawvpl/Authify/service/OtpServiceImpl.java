@@ -22,8 +22,8 @@ public class OtpServiceImpl implements OtpService {
 
     private final OtpRepository otpRepository;
 
-    private static final int LOGIN_EXPIRY = 5;
-    private static final int REGISTER_EXPIRY = 5;
+    private static final int LOGIN_EXPIRY = 5;     // minutes
+    private static final int REGISTER_EXPIRY = 5;  // minutes
 
     // ================= GENERATE OTP =================
     @Override
@@ -36,23 +36,12 @@ public class OtpServiceImpl implements OtpService {
     @Transactional
     public String generateLoginOtp(UserEntity user) {
 
-        String email = user.getEmail().toLowerCase().trim();
+        String email = normalizeEmail(user.getEmail());
         String otp = generateOtp();
 
-        otpRepository.findTopByEmailAndPurposeOrderByCreatedAtDesc(email, "LOGIN")
-                .ifPresent(oldOtp -> {
-                    oldOtp.setIsUsed(true);
-                    otpRepository.save(oldOtp);
-                });
+        invalidateOldOtp(email, "LOGIN");
 
-        OtpVerification entity = new OtpVerification();
-        entity.setUserId(user.getId());
-        entity.setEmail(email);
-        entity.setPhoneNumber(user.getPhoneNumber());
-        entity.setOtp(otp);
-        entity.setPurpose("LOGIN");
-        entity.setExpiryTime(LocalDateTime.now().plusMinutes(LOGIN_EXPIRY));
-        entity.setIsUsed(false);
+        OtpVerification entity = buildOtpEntity(user, email, otp, "LOGIN", LOGIN_EXPIRY);
 
         otpRepository.save(entity);
 
@@ -65,7 +54,6 @@ public class OtpServiceImpl implements OtpService {
     @Override
     @Transactional
     public void verifyLoginOtp(UserEntity user, String otp) {
-
         validateOtp(user, otp, "LOGIN");
     }
 
@@ -74,23 +62,12 @@ public class OtpServiceImpl implements OtpService {
     @Transactional
     public String generateRegisterOtp(UserEntity user) {
 
-        String email = user.getEmail().toLowerCase().trim();
+        String email = normalizeEmail(user.getEmail());
         String otp = generateOtp();
 
-        otpRepository.findTopByEmailAndPurposeOrderByCreatedAtDesc(email, "REGISTER")
-                .ifPresent(oldOtp -> {
-                    oldOtp.setIsUsed(true);
-                    otpRepository.save(oldOtp);
-                });
+        invalidateOldOtp(email, "REGISTER");
 
-        OtpVerification entity = new OtpVerification();
-        entity.setUserId(user.getId());
-        entity.setEmail(email);
-        entity.setPhoneNumber(user.getPhoneNumber());
-        entity.setOtp(otp);
-        entity.setPurpose("REGISTER");
-        entity.setExpiryTime(LocalDateTime.now().plusMinutes(REGISTER_EXPIRY));
-        entity.setIsUsed(false);
+        OtpVerification entity = buildOtpEntity(user, email, otp, "REGISTER", REGISTER_EXPIRY);
 
         otpRepository.save(entity);
 
@@ -103,22 +80,25 @@ public class OtpServiceImpl implements OtpService {
     @Override
     @Transactional
     public void verifyRegisterOtp(UserEntity user, String otp) {
-
         validateOtp(user, otp, "REGISTER");
     }
 
     // ================= COMMON VALIDATION =================
     private void validateOtp(UserEntity user, String otp, String purpose) {
 
-        String email = user.getEmail().toLowerCase().trim();
+        if (otp == null || otp.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP required");
+        }
+
+        String email = normalizeEmail(user.getEmail());
 
         OtpVerification entity = otpRepository
                 .findTopByEmailAndPurposeOrderByCreatedAtDesc(email, purpose)
                 .orElseThrow(() ->
                         new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP not found"));
 
-        if (otp == null || otp.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP required");
+        if (Boolean.TRUE.equals(entity.getIsUsed())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP already used");
         }
 
         if (!entity.getOtp().equals(otp)) {
@@ -130,13 +110,38 @@ public class OtpServiceImpl implements OtpService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP expired");
         }
 
-        if (Boolean.TRUE.equals(entity.getIsUsed())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP already used");
-        }
-
         entity.setIsUsed(true);
         otpRepository.save(entity);
 
         log.info("{} OTP verified for {}", purpose, email);
+    }
+
+    // ================= HELPER METHODS =================
+
+    private String normalizeEmail(String email) {
+        return email == null ? "" : email.trim().toLowerCase();
+    }
+
+    private void invalidateOldOtp(String email, String purpose) {
+        otpRepository.findTopByEmailAndPurposeOrderByCreatedAtDesc(email, purpose)
+                .ifPresent(oldOtp -> {
+                    oldOtp.setIsUsed(true);
+                    otpRepository.save(oldOtp);
+                });
+    }
+
+    private OtpVerification buildOtpEntity(UserEntity user, String email, String otp,
+                                           String purpose, int expiryMinutes) {
+
+        OtpVerification entity = new OtpVerification();
+        entity.setUserId(user.getId());
+        entity.setEmail(email);
+        entity.setPhoneNumber(user.getPhoneNumber());
+        entity.setOtp(otp);
+        entity.setPurpose(purpose);
+        entity.setExpiryTime(LocalDateTime.now().plusMinutes(expiryMinutes));
+        entity.setIsUsed(false);
+
+        return entity;
     }
 }

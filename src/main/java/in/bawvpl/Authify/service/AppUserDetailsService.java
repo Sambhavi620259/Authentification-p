@@ -82,28 +82,24 @@ public class AppUserDetailsService implements UserDetailsService {
         }
     }
 
-    // ================= LOGIN STEP 2 =================
+    // ================= LOGIN STEP 2 (FIXED) =================
     @Transactional
-    public AuthResponse verifyLoginOtp(String email, String otp) {
-
-        email = email.trim().toLowerCase();
-
-        UserEntity user = userRepository.findByEmail(email)
-                .orElseThrow(() ->
-                        new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+    public AuthResponse verifyLoginOtp(UserEntity user, String otp) {
 
         if (otp == null || otp.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP required");
         }
 
+        // ✅ verify OTP
         otpService.verifyLoginOtp(user, otp);
 
-        // ✅ GENERATE JWT
+        // ✅ generate JWT token
         String token = jwtUtil.generateAccessToken(user.getEmail());
 
+        // ✅ RETURN CORRECT STRUCTURE
         return AuthResponse.builder()
-                .accessToken(token)
-                .profile(mapToProfile(user))
+                .token(token)                 // 🔥 FIX (was accessToken)
+                .userId(user.getUserId())     // optional but useful
                 .build();
     }
 

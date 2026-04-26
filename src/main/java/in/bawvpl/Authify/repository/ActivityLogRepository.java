@@ -9,9 +9,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ActivityLogRepository extends JpaRepository<ActivityLog, Long> {
 
-    // ================= DASHBOARD =================
-    Page<ActivityLog> findByUser_Id(Long userId, Pageable pageable);
-
-    // ================= SORTED (BEST PRACTICE) =================
+    // ✅ Sorted activities (USED in dashboard)
     Page<ActivityLog> findByUser_IdOrderByTimestampDesc(Long userId, Pageable pageable);
 }

@@ -7,7 +7,13 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "transactions")
+@Table(
+        name = "transactions",
+        indexes = {
+                @Index(name = "idx_tx_user", columnList = "user_id"),
+                @Index(name = "idx_tx_payment_date", columnList = "payment_date")
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -20,7 +26,7 @@ public class TransactionEntity {
     private Long id;
 
     // ================= USER =================
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     @JsonIgnore
     private UserEntity user;
@@ -31,23 +37,23 @@ public class TransactionEntity {
     private ApplicationEntity app;
 
     // ================= DETAILS =================
-    @Column(name = "payment_description")
+    @Column(name = "payment_description", length = 255)
     private String paymentDescription;
 
-    @Column(name = "payment_method")
+    @Column(name = "payment_method", length = 50)
     private String paymentMethod;
 
-    @Column(name = "payment_source")
+    @Column(name = "payment_source", length = 50)
     private String paymentSource;
 
     @Column(nullable = false)
     private Double amount;
 
     // ================= DASHBOARD =================
-    @Column(name = "type", nullable = false)
+    @Column(name = "type", nullable = false, length = 20)
     private String type; // CREDIT / DEBIT
 
-    @Column(name = "status", nullable = false)
+    @Column(name = "status", nullable = false, length = 20)
     private String status; // SUCCESS / FAILED / PENDING
 
     @Column(name = "payment_date", nullable = false)
@@ -61,6 +67,10 @@ public class TransactionEntity {
 
         if (this.paymentDate == null) {
             this.paymentDate = now;
+        }
+
+        if (this.amount == null) {
+            this.amount = 0.0;
         }
 
         if (this.status == null || this.status.isBlank()) {
