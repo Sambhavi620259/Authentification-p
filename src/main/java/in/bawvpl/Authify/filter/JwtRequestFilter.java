@@ -62,6 +62,7 @@ public class JwtRequestFilter extends OncePerRequestFilter {
 
             final String authHeader = request.getHeader("Authorization");
 
+            // ✅ No token → skip
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {
                 filterChain.doFilter(request, response);
                 return;
@@ -69,7 +70,7 @@ public class JwtRequestFilter extends OncePerRequestFilter {
 
             final String jwt = authHeader.substring(7).trim();
 
-            if (jwt.isBlank()) {
+            if (jwt.isEmpty()) {
                 filterChain.doFilter(request, response);
                 return;
             }
@@ -91,7 +92,7 @@ public class JwtRequestFilter extends OncePerRequestFilter {
                 UserDetails userDetails =
                         userDetailsService.loadUserByUsername(username);
 
-                // ✅ FIX HERE
+                // ✅ FIX: validate using username
                 if (jwtUtil.validateToken(jwt, userDetails.getUsername())) {
 
                     UsernamePasswordAuthenticationToken auth =
@@ -115,9 +116,10 @@ public class JwtRequestFilter extends OncePerRequestFilter {
             }
 
         } catch (Exception ex) {
-            log.error("❌ JWT filter error: {}", ex.getMessage());
+            log.error("❌ JWT filter error: {}", ex.getMessage(), ex); // 🔥 better logging
         }
 
+        // ✅ always continue
         filterChain.doFilter(request, response);
     }
 }

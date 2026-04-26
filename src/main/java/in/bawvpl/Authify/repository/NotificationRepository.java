@@ -1,17 +1,20 @@
 package in.bawvpl.Authify.repository;
 
 import in.bawvpl.Authify.entity.NotificationEntity;
-
-import org.springframework.data.domain.*;
+import in.bawvpl.Authify.entity.UserEntity;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
-@Repository
+import java.util.List;
+
 public interface NotificationRepository extends JpaRepository<NotificationEntity, Long> {
 
-    // ✅ Sorted notifications (USED in dashboard)
-    Page<NotificationEntity> findByUser_IdOrderByCreatedAtDesc(Long userId, Pageable pageable);
+    // Existing
+    List<NotificationEntity> findByUserOrderByCreatedAtDesc(UserEntity user);
 
-    // ✅ Count unread notifications
-    long countByUser_IdAndReadFalse(Long userId);
+    long countByUserAndReadFalse(UserEntity user);
+
+    // 🔥 ADD THIS (FIX ERROR)
+    Page<NotificationEntity> findByUser_IdOrderByCreatedAtDesc(Long userId, Pageable pageable);
 }

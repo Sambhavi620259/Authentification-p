@@ -83,7 +83,9 @@ public class SecurityConfig {
                                 "/api/v1.0/cart/**",
                                 "/api/v1.0/payment/**",
                                 "/api/v1.0/dashboard/**",
-                                "/api/v1.0/kyc/**"
+                                "/api/v1.0/kyc/**",
+                                "/api/v1.0/notifications/**",
+                                "/api/v1.0/tickets/**"
                         ).authenticated()
 
                         .anyRequest().authenticated()
