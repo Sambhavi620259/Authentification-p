@@ -12,6 +12,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1.0/application")
@@ -98,6 +99,34 @@ public class ApplicationController {
                 ApiResponse.builder()
                         .status(200)
                         .message("Deleted successfully")
+                        .data(null)
+                        .build()
+        );
+    }
+
+    // ================= OPEN APP (USER ACTION) =================
+    @PostMapping("/open")
+    public ResponseEntity<?> openApp(@RequestBody Map<String, Long> body) {
+
+        Long appId = body.get("appId");
+
+        if (appId == null) {
+            return ResponseEntity.badRequest().body(
+                    ApiResponse.builder()
+                            .status(400)
+                            .message("appId is required")
+                            .data(null)
+                            .build()
+            );
+        }
+
+        // 🔥 call service (you should implement tracking inside service)
+        applicationService.openApp(appId);
+
+        return ResponseEntity.ok(
+                ApiResponse.builder()
+                        .status(200)
+                        .message("App opened successfully")
                         .data(null)
                         .build()
         );

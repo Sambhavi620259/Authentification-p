@@ -34,6 +34,7 @@ public class TransactionEntity {
     // ================= APP =================
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "app_id")
+    @JsonIgnore // 🔥 prevent recursion / large response
     private ApplicationEntity app;
 
     // ================= DETAILS =================

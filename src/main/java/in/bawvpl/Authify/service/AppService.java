@@ -1,16 +1,22 @@
 package in.bawvpl.Authify.service;
 
 import in.bawvpl.Authify.entity.ApplicationEntity;
+import in.bawvpl.Authify.entity.UserApplicationEntity;
+import in.bawvpl.Authify.entity.UserEntity;
 import in.bawvpl.Authify.repository.ApplicationRepository;
+import in.bawvpl.Authify.repository.UserApplicationRepository;
+import in.bawvpl.Authify.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -19,6 +25,8 @@ import java.util.List;
 public class AppService {
 
     private final ApplicationRepository applicationRepository;
+    private final UserApplicationRepository userAppRepo;   // 🔥 added
+    private final UserRepository userRepository;           // 🔥 added
 
     // ================= CREATE =================
     @Transactional
@@ -98,6 +106,44 @@ public class AppService {
         applicationRepository.delete(app);
 
         log.info("App deleted: {}", app.getAppName());
+    }
+
+    // ================= OPEN APP (🔥 FIXED) =================
+    @Transactional
+    public void openApp(Long appId) {
+
+        // 🔥 get logged-in user from JWT
+        String email = SecurityContextHolder.getContext()
+                .getAuthentication()
+                .getName();
+
+        UserEntity user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        ApplicationEntity app = getApp(appId);
+
+        // 🔥 check existing record
+        UserApplicationEntity ua = userAppRepo
+                .findByUser_IdAndApp_AppId(user.getId(), appId)
+                .orElse(null);
+
+        if (ua != null) {
+            ua.setVisitCounter(ua.getVisitCounter() + 1);
+            ua.setUpdatedAt(LocalDateTime.now());
+        } else {
+            ua = UserApplicationEntity.builder()
+                    .user(user)
+                    .app(app)
+                    .visitCounter(1)
+                    .subscriptionStatus("ACTIVE")
+                    .createdAt(LocalDateTime.now())
+                    .updatedAt(LocalDateTime.now())
+                    .build();
+        }
+
+        userAppRepo.save(ua);
+
+        log.info("App opened by user {} for app {}", user.getId(), appId);
     }
 
     // ================= VALIDATION =================

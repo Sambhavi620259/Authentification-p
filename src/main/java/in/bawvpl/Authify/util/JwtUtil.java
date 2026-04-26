@@ -63,15 +63,15 @@ public class JwtUtil {
         try {
             if (token == null || token.isBlank()) return false;
 
-            token = cleanToken(token);
+            String clean = cleanToken(token);
 
-            final String extractedUsername = extractUsername(token);
+            final String extractedUsername = extractUsername(clean);
 
-            return extractedUsername.equals(username) && !isTokenExpired(token);
+            return extractedUsername.equals(username) && !isTokenExpired(clean);
 
         } catch (ExpiredJwtException e) {
             log.warn("JWT expired: {}", e.getMessage());
-        } catch (JwtException e) {
+        } catch (JwtException | IllegalArgumentException e) {
             log.error("JWT invalid: {}", e.getMessage());
         }
 
@@ -91,7 +91,7 @@ public class JwtUtil {
 
     // ================= CLEAN TOKEN =================
     private String cleanToken(String token) {
-        if (token.startsWith("Bearer ")) {
+        if (token != null && token.startsWith("Bearer ")) {
             return token.substring(7);
         }
         return token;
@@ -103,7 +103,7 @@ public class JwtUtil {
         return Jwts.parserBuilder()
                 .setSigningKey(signingKey)
                 .build()
-                .parseClaimsJws(token)
+                .parseClaimsJws(cleanToken(token))
                 .getBody();
     }
 }
