@@ -1,123 +1,69 @@
 package in.bawvpl.Authify.service;
 
-import in.bawvpl.Authify.entity.ApplicationEntity;
-import in.bawvpl.Authify.entity.TransactionEntity;
-import in.bawvpl.Authify.entity.UserEntity;
-
-import in.bawvpl.Authify.repository.ApplicationRepository;
-import in.bawvpl.Authify.repository.TransactionRepository;
-import in.bawvpl.Authify.repository.UserRepository;
-import in.bawvpl.Authify.repository.UserApplicationRepository;
-
+import in.bawvpl.Authify.entity.*;
+import in.bawvpl.Authify.repository.*;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-
-import org.springframework.data.domain.PageRequest;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
-import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class PaymentService {
 
-    private final TransactionRepository transactionRepository;
+    private final PaymentOrderRepository paymentOrderRepository;
     private final UserRepository userRepository;
-    private final ApplicationRepository applicationRepository;
-    private final UserApplicationRepository userAppRepository;
+    private final TransactionRepository transactionRepository;
 
-    // ================= CREATE PAYMENT =================
-    @Transactional
-    public TransactionEntity createPayment(
-            String email,
-            Long appId,
-            String method,
-            String source,
-            Double amount
-    ) {
+    // ================= CREATE ORDER =================
+    public PaymentOrder createOrder(String email, Long appId, Double amount) {
 
-        email = email.toLowerCase().trim();
+        UserEntity user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
-        if (amount == null || amount <= 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid amount");
-        }
-
-        if (method == null || method.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment method required");
-        }
-
-        // ✅ USER
-        UserEntity user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "User not found"));
-
-        // ✅ APP
-        ApplicationEntity app = applicationRepository.findById(appId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "App not found"));
-
-        // ✅ CREATE TRANSACTION
-        TransactionEntity transaction = TransactionEntity.builder()
+        PaymentOrder order = PaymentOrder.builder()
                 .user(user)
-                .app(app)
-                .paymentDescription("Payment for App: " + app.getAppName())
-                .paymentMethod(method)
-                .paymentSource(source)
+                .orderId("ORD_" + UUID.randomUUID())
+                .paymentMethod("UPI")
+                .paymentStatus("CREATED")
                 .amount(amount)
-                .status("PENDING") // ✅ FIXED
-                .type("DEBIT")
                 .build();
 
-        return transactionRepository.save(transaction);
+        return paymentOrderRepository.save(order);
     }
 
-    // ================= GET USER PAYMENTS =================
-    public List<TransactionEntity> getUserPayments(String email) {
+    // ================= VERIFY PAYMENT =================
+    public String verifyPayment(String orderId, String status) {
 
-        email = email.toLowerCase().trim();
+        PaymentOrder order = paymentOrderRepository.findByOrderId(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
 
-        UserEntity user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "User not found"));
+        if (status.equalsIgnoreCase("SUCCESS")) {
 
-        return transactionRepository
-                .findByUser_IdOrderByPaymentDateDesc(
-                        user.getId(),
-                        PageRequest.of(0, 10)
-                )
-                .getContent();
-    }
+            order.setPaymentStatus("SUCCESS");
+            paymentOrderRepository.save(order);
 
-    // ================= UPDATE STATUS =================
-    @Transactional
-    public TransactionEntity updateStatus(Long id, String status) {
+            // ✅ CREATE TRANSACTION ONLY AFTER SUCCESS
+            TransactionEntity txn = TransactionEntity.builder()
+                    .user(order.getUser())
+                    .app(order.getApp())
+                    .amount(order.getAmount())
+                    .paymentMethod("UPI")
+                    .paymentSource("GPay/PhonePe")
+                    .status("SUCCESS")
+                    .type("DEBIT")
+                    .paymentDescription("App purchase")
+                    .build();
 
-        TransactionEntity tx = transactionRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Transaction not found"));
+            transactionRepository.save(txn);
 
-        tx.setStatus(status); // ✅ FIXED
+            return "Payment Success";
 
-        // ✅ AUTO ACTIVATE APP
-        if ("SUCCESS".equalsIgnoreCase(status)) {
+        } else {
+            order.setPaymentStatus("FAILED");
+            paymentOrderRepository.save(order);
 
-            UserEntity user = tx.getUser();
-            ApplicationEntity app = tx.getApp();
-
-            userAppRepository.findByUser_IdAndApp_AppId(user.getId(), app.getAppId())
-                    .ifPresent(userApp -> {
-                        userApp.setSubscriptionStatus("ACTIVE");
-                        userAppRepository.save(userApp);
-                    });
-
-            log.info("App activated for user [{}] app [{}]",
-                    user.getEmail(), app.getAppId());
+            return "Payment Failed";
         }
-
-        return transactionRepository.save(tx);
     }
 }

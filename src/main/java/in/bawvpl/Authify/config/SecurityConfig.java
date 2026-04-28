@@ -18,7 +18,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 import org.springframework.web.cors.*;
 
-import jakarta.servlet.http.HttpServletResponse; // 🔥 FIX
+import jakarta.servlet.http.HttpServletResponse;
 
 import java.util.List;
 
@@ -56,8 +56,10 @@ public class SecurityConfig {
 
                 .authorizeHttpRequests(auth -> auth
 
+                        // ✅ Preflight
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
+                        // ✅ Public APIs
                         .requestMatchers(
                                 "/",
                                 "/error",
@@ -70,6 +72,12 @@ public class SecurityConfig {
                                 "/v3/api-docs/**"
                         ).permitAll()
 
+                        // ✅ PAYMENT VERIFY (IMPORTANT)
+                        .requestMatchers(
+                                "/api/v1.0/payment/verify"
+                        ).permitAll()
+
+                        // ✅ ADMIN
                         .requestMatchers(
                                 "/api/v1.0/admin/**",
                                 "/api/v1.0/kyc/verify/**",
@@ -77,6 +85,7 @@ public class SecurityConfig {
                                 "/api/v1.0/kyc/all"
                         ).hasRole("ADMIN")
 
+                        // ✅ AUTHENTICATED APIs
                         .requestMatchers(
                                 "/api/v1.0/profile/**",
                                 "/api/v1.0/application/**",
@@ -104,7 +113,7 @@ public class SecurityConfig {
         config.setAllowedOriginPatterns(List.of(
                 "http://localhost:5173",
                 "http://localhost:5174",
-                "http://43.205.116.38:*"
+                "http://43.205.116.38"
         ));
 
         config.setAllowedMethods(List.of(
