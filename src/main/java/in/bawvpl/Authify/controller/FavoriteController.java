@@ -6,11 +6,11 @@ import in.bawvpl.Authify.service.FavoriteService;
 
 import lombok.RequiredArgsConstructor;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
-import org.springframework.http.HttpStatus;
 
 import java.util.List;
 
@@ -32,8 +32,10 @@ public class FavoriteController {
 
     // ================= ADD =================
     @PostMapping("/{appId}")
-    public ResponseEntity<ApiResponse<String>> add(Authentication auth,
-                                                   @PathVariable Long appId) {
+    public ResponseEntity<ApiResponse<String>> add(
+            Authentication auth,
+            @PathVariable Long appId
+    ) {
 
         favoriteService.add(getEmail(auth), appId);
 
@@ -46,9 +48,11 @@ public class FavoriteController {
         );
     }
 
-    // ================= GET (UPDATED TO /list) =================
+    // ================= GET (FIXED → /list) =================
     @GetMapping("/list")
-    public ResponseEntity<ApiResponse<List<FavoriteResponse>>> get(Authentication auth) {
+    public ResponseEntity<ApiResponse<List<FavoriteResponse>>> get(
+            Authentication auth
+    ) {
 
         List<FavoriteResponse> list =
                 favoriteService.get(getEmail(auth));
@@ -64,8 +68,10 @@ public class FavoriteController {
 
     // ================= REMOVE =================
     @DeleteMapping("/{appId}")
-    public ResponseEntity<ApiResponse<String>> remove(Authentication auth,
-                                                      @PathVariable Long appId) {
+    public ResponseEntity<ApiResponse<String>> remove(
+            Authentication auth,
+            @PathVariable Long appId
+    ) {
 
         favoriteService.remove(getEmail(auth), appId);
 
