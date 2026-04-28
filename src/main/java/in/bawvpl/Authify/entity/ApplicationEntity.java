@@ -17,6 +17,7 @@ public class ApplicationEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "app_id") // ✅ important mapping
     private Long appId;
 
     // ================= USER =================
@@ -42,7 +43,7 @@ public class ApplicationEntity {
     private String appLogo;
 
     @Builder.Default
-    @Column(nullable = false)
+    @Column(name = "status", nullable = false)
     private String status = "ACTIVE";
 
     @Column(name = "created_at", updatable = false)
@@ -55,19 +56,19 @@ public class ApplicationEntity {
     public void onCreate() {
         LocalDateTime now = LocalDateTime.now();
 
-        if (createdAt == null) {
-            createdAt = now;
+        if (this.createdAt == null) {
+            this.createdAt = now;
         }
 
-        if (status == null) {
-            status = "ACTIVE";
+        if (this.status == null || this.status.isBlank()) {
+            this.status = "ACTIVE";
         }
 
-        updatedAt = now;
+        this.updatedAt = now;
     }
 
     @PreUpdate
     public void onUpdate() {
-        updatedAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
     }
 }
