@@ -16,7 +16,7 @@ public interface ApplicationRepository extends JpaRepository<ApplicationEntity, 
     Page<ApplicationEntity> findByStatus(String status, Pageable pageable);
 
     // ✅ Optional (useful for non-paginated cases)
-    boolean existsByIdAndStatus(Long id, String status);
+    boolean existsByAppIdAndStatus(Long appId, String status);
 
     // ================= SEARCH =================
     Page<ApplicationEntity> findByAppNameContainingIgnoreCase(
