@@ -28,70 +28,99 @@ public class FavoriteService {
     @Transactional
     public void add(String email, Long appId) {
 
-        final String normalizedEmail = email.toLowerCase().trim();
+        UserEntity user = getUser(email);
+        ApplicationEntity app = getApp(appId);
 
-        UserEntity user = userRepository.findByEmailIgnoreCase(normalizedEmail)
-                .orElseThrow(() ->
-                        new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
-
-        ApplicationEntity app = applicationRepository.findById(appId)
-                .orElseThrow(() ->
-                        new ResponseStatusException(HttpStatus.NOT_FOUND, "App not found"));
-
-        // ✅ FIXED (appId field)
         if (favoriteRepository.existsByUser_IdAndApp_AppId(user.getId(), appId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Already in favorites");
         }
 
-        FavoriteEntity fav = FavoriteEntity.builder()
-                .user(user)
-                .app(app)
-                .build();
+        favoriteRepository.save(
+                FavoriteEntity.builder()
+                        .user(user)
+                        .app(app)
+                        .build()
+        );
 
-        favoriteRepository.save(fav);
+        log.info("Added to favorites: user={}, appId={}", user.getEmail(), appId);
+    }
 
-        log.info("Added to favorites: user={}, appId={}", normalizedEmail, appId);
+    // ================= TOGGLE (BEST UX) =================
+    @Transactional
+    public String toggleFavorite(String email, Long appId) {
+
+        UserEntity user = getUser(email);
+        ApplicationEntity app = getApp(appId);
+
+        if (favoriteRepository.existsByUser_IdAndApp_AppId(user.getId(), appId)) {
+            favoriteRepository.deleteByUser_IdAndApp_AppId(user.getId(), appId);
+            log.info("Removed from favorites: user={}, appId={}", user.getEmail(), appId);
+            return "Removed from favorites";
+        }
+
+        favoriteRepository.save(
+                FavoriteEntity.builder()
+                        .user(user)
+                        .app(app)
+                        .build()
+        );
+
+        log.info("Added to favorites: user={}, appId={}", user.getEmail(), appId);
+        return "Added to favorites";
     }
 
     // ================= GET =================
     public List<FavoriteResponse> get(String email) {
 
-        final String normalizedEmail = email.toLowerCase().trim();
+        UserEntity user = getUser(email);
 
-        UserEntity user = userRepository.findByEmailIgnoreCase(normalizedEmail)
-                .orElseThrow(() ->
-                        new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
-
-        List<FavoriteEntity> list = favoriteRepository.findByUser_Id(user.getId());
-
-        return list.stream()
+        return favoriteRepository.findByUser_Id(user.getId())
+                .stream()
                 .map(f -> FavoriteResponse.builder()
-                        .appId(f.getApp().getAppId())   // ✅ FIXED
+                        .appId(f.getApp().getAppId())
                         .appName(f.getApp().getAppName())
                         .appLogo(f.getApp().getAppLogo())
                         .appUrl(f.getApp().getAppUrl())
                         .build()
                 )
-                .collect(Collectors.toList()); // ✅ FIXED
+                .collect(Collectors.toList());
     }
 
     // ================= REMOVE =================
     @Transactional
     public void remove(String email, Long appId) {
 
-        final String normalizedEmail = email.toLowerCase().trim();
+        UserEntity user = getUser(email);
 
-        UserEntity user = userRepository.findByEmailIgnoreCase(normalizedEmail)
-                .orElseThrow(() ->
-                        new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
-
-        // ✅ FIXED
         if (!favoriteRepository.existsByUser_IdAndApp_AppId(user.getId(), appId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Favorite not found");
         }
 
         favoriteRepository.deleteByUser_IdAndApp_AppId(user.getId(), appId);
 
-        log.info("Removed from favorites: user={}, appId={}", normalizedEmail, appId);
+        log.info("Removed from favorites: user={}, appId={}", user.getEmail(), appId);
+    }
+
+    // ================= HELPERS =================
+    private UserEntity getUser(String email) {
+
+        if (email == null || email.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email required");
+        }
+
+        return userRepository.findByEmailIgnoreCase(email.toLowerCase().trim())
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+    }
+
+    private ApplicationEntity getApp(Long appId) {
+
+        if (appId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "appId required");
+        }
+
+        return applicationRepository.findById(appId)
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "App not found"));
     }
 }

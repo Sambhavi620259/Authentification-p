@@ -30,27 +30,31 @@ public class FavoriteController {
         return auth.getName().toLowerCase().trim();
     }
 
-    // ================= ADD =================
+    // ================= ADD / TOGGLE =================
     @PostMapping("/{appId}")
-    public ResponseEntity<ApiResponse<String>> add(
+    public ResponseEntity<ApiResponse<String>> toggleFavorite(
             Authentication auth,
             @PathVariable Long appId
     ) {
 
-        favoriteService.add(getEmail(auth), appId);
+        if (appId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "appId required");
+        }
+
+        String message = favoriteService.toggleFavorite(getEmail(auth), appId);
 
         return ResponseEntity.ok(
                 ApiResponse.<String>builder()
                         .status(200)
-                        .message("Added to favorites")
+                        .message(message) // "Added" or "Removed"
                         .data(null)
                         .build()
         );
     }
 
-    // ================= GET (FIXED → /list) =================
+    // ================= GET LIST =================
     @GetMapping("/list")
-    public ResponseEntity<ApiResponse<List<FavoriteResponse>>> get(
+    public ResponseEntity<ApiResponse<List<FavoriteResponse>>> getFavorites(
             Authentication auth
     ) {
 
@@ -66,12 +70,16 @@ public class FavoriteController {
         );
     }
 
-    // ================= REMOVE =================
+    // ================= REMOVE (OPTIONAL SEPARATE API) =================
     @DeleteMapping("/{appId}")
-    public ResponseEntity<ApiResponse<String>> remove(
+    public ResponseEntity<ApiResponse<String>> removeFavorite(
             Authentication auth,
             @PathVariable Long appId
     ) {
+
+        if (appId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "appId required");
+        }
 
         favoriteService.remove(getEmail(auth), appId);
 
