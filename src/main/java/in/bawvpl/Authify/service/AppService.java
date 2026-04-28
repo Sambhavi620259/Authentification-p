@@ -11,7 +11,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -25,8 +24,8 @@ import java.util.List;
 public class AppService {
 
     private final ApplicationRepository applicationRepository;
-    private final UserApplicationRepository userAppRepo;   // 🔥 added
-    private final UserRepository userRepository;           // 🔥 added
+    private final UserApplicationRepository userAppRepo;
+    private final UserRepository userRepository;
 
     // ================= CREATE =================
     @Transactional
@@ -43,21 +42,25 @@ public class AppService {
 
     // ================= GET ALL =================
     public List<ApplicationEntity> getAllApps() {
-
-        List<ApplicationEntity> list = applicationRepository.findAll();
-
-        log.info("Fetched {} apps", list.size());
-
-        return list;
+        return applicationRepository.findAll();
     }
 
     // ================= GET ONE =================
     public ApplicationEntity getApp(Long id) {
-
         return applicationRepository.findById(id)
                 .orElseThrow(() ->
-                        new ResponseStatusException(HttpStatus.NOT_FOUND, "App not found")
-                );
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "App not found"));
+    }
+
+    // ================= GET USER APPS =================
+    public List<UserApplicationEntity> getAppsByUser(String email) {
+
+        UserEntity user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        // ✅ FIXED METHOD NAME
+        return userAppRepo.findAllByUser_Id(user.getId());
     }
 
     // ================= UPDATE =================
@@ -90,39 +93,25 @@ public class AppService {
             app.setStatus(updated.getStatus());
         }
 
-        ApplicationEntity saved = applicationRepository.save(app);
-
-        log.info("App updated: {}", saved.getAppName());
-
-        return saved;
+        return applicationRepository.save(app);
     }
 
     // ================= DELETE =================
     @Transactional
     public void deleteApp(Long id) {
-
-        ApplicationEntity app = getApp(id);
-
-        applicationRepository.delete(app);
-
-        log.info("App deleted: {}", app.getAppName());
+        applicationRepository.delete(getApp(id));
     }
 
-    // ================= OPEN APP (🔥 FIXED) =================
+    // ================= OPEN APP =================
     @Transactional
-    public void openApp(Long appId) {
-
-        // 🔥 get logged-in user from JWT
-        String email = SecurityContextHolder.getContext()
-                .getAuthentication()
-                .getName();
+    public void openApp(Long appId, String email) {
 
         UserEntity user = userRepository.findByEmailIgnoreCase(email)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
         ApplicationEntity app = getApp(appId);
 
-        // 🔥 check existing record
         UserApplicationEntity ua = userAppRepo
                 .findByUser_IdAndApp_AppId(user.getId(), appId)
                 .orElse(null);

@@ -21,6 +21,7 @@ public class RecentAppService {
                 userAppRepo.findAllByUser_Id(userId);
 
         return list.stream()
+                .filter(ua -> ua.getUpdatedAt() != null) // ✅ safety
                 .sorted((a, b) -> b.getUpdatedAt().compareTo(a.getUpdatedAt()))
                 .limit(5)
                 .map(ua -> new RecentAppDto(

@@ -50,9 +50,7 @@ public class DashboardServiceImpl implements DashboardService {
                     transactionRepository.findByUser_IdOrderByPaymentDateDesc(userId, pageable);
 
             List<TransactionEntity> transactions =
-                    (txPage != null) ? txPage.getContent() : List.of();
-
-            // ================= CALCULATIONS =================
+                    txPage != null ? txPage.getContent() : List.of();
 
             double totalSpent = transactions.stream()
                     .filter(t -> "DEBIT".equalsIgnoreCase(t.getType()))
@@ -64,8 +62,6 @@ public class DashboardServiceImpl implements DashboardService {
                     .mapToDouble(t -> t.getAmount() != null ? t.getAmount() : 0.0)
                     .sum();
 
-            // ================= COUNTS =================
-
             long totalApps = applicationRepository.countByUser_Id(userId);
 
             long activeSubs = subscriptionRepository
@@ -73,7 +69,6 @@ public class DashboardServiceImpl implements DashboardService {
 
             long referrals = referralRepository.countByReferrer_Id(userId);
 
-            // ❌ Wallet removed → replaced with 0
             Double walletBalance = 0.0;
 
             String kycStatus = kycRepository.findByUser_Id(userId)
@@ -81,12 +76,10 @@ public class DashboardServiceImpl implements DashboardService {
                     .filter(s -> s != null && !s.isBlank())
                     .orElse("PENDING");
 
-            // ================= RESPONSE =================
-
             return DashboardSummaryResponse.builder()
                     .totalApps((int) totalApps)
                     .activeSubscriptions((int) activeSubs)
-                    .walletBalance(walletBalance) // keep for frontend compatibility
+                    .walletBalance(walletBalance)
                     .totalTransactions(transactions.size())
                     .referralCount((int) referrals)
                     .kycStatus(kycStatus)
@@ -100,7 +93,7 @@ public class DashboardServiceImpl implements DashboardService {
 
             throw new ResponseStatusException(
                     HttpStatus.INTERNAL_SERVER_ERROR,
-                    e.getMessage()
+                    "Failed to fetch dashboard"
             );
         }
     }
@@ -140,7 +133,11 @@ public class DashboardServiceImpl implements DashboardService {
 
         UserEntity user = getUser(email);
 
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable = PageRequest.of(
+                page,
+                Math.min(size, 50),
+                Sort.by("createdAt").descending()
+        );
 
         return notificationRepository
                 .findByUser_IdOrderByCreatedAtDesc(user.getId(), pageable)
@@ -152,14 +149,18 @@ public class DashboardServiceImpl implements DashboardService {
                         .build());
     }
 
-    // ================= ACTIVITIES =================
+    // ================= ACTIVITY (🔥 FIXED) =================
 
     @Override
-    public Page<ActivityResponse> getActivitiesByEmail(String email, int page, int size) {
+    public Page<ActivityResponse> getActivity(String email, int page, int size) {
 
         UserEntity user = getUser(email);
 
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable = PageRequest.of(
+                page,
+                Math.min(size, 50),
+                Sort.by("timestamp").descending()
+        );
 
         return activityLogRepository
                 .findByUser_IdOrderByTimestampDesc(user.getId(), pageable)

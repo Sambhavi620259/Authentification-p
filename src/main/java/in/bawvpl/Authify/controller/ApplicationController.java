@@ -9,9 +9,11 @@ import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
-import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -28,28 +30,43 @@ public class ApplicationController {
     @PostMapping
     public ResponseEntity<?> create(@RequestBody ApplicationEntity app) {
 
-        ApplicationEntity saved = applicationService.createApp(app);
-
         return ResponseEntity.ok(
                 ApiResponse.builder()
                         .status(200)
                         .message("App created successfully")
-                        .data(saved)
+                        .data(applicationService.createApp(app))
                         .build()
         );
     }
 
-    // ================= GET ALL =================
-    @GetMapping
-    public ResponseEntity<?> all() {
-
-        List<ApplicationEntity> list = applicationService.getAllApps();
+    // ================= GET ALL (FRONTEND) =================
+    @GetMapping("/list")
+    public ResponseEntity<?> list() {
 
         return ResponseEntity.ok(
                 ApiResponse.builder()
                         .status(200)
                         .message("Apps fetched")
-                        .data(list)
+                        .data(applicationService.getAllApps())
+                        .build()
+        );
+    }
+
+    // ================= MY APPS =================
+    @GetMapping("/my")
+    public ResponseEntity<?> myApps(Authentication auth) {
+
+        if (auth == null || auth.getName() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
+        }
+
+        String email = auth.getName();
+
+        return ResponseEntity.ok(
+                ApiResponse.builder()
+                        .status(200)
+                        .message("My apps fetched")
+                        .data(applicationService.getAppsByUser(email))
                         .build()
         );
     }
@@ -58,13 +75,11 @@ public class ApplicationController {
     @GetMapping("/{id}")
     public ResponseEntity<?> one(@PathVariable Long id) {
 
-        ApplicationEntity app = applicationService.getApp(id);
-
         return ResponseEntity.ok(
                 ApiResponse.builder()
                         .status(200)
                         .message("App fetched")
-                        .data(app)
+                        .data(applicationService.getApp(id))
                         .build()
         );
     }
@@ -77,13 +92,11 @@ public class ApplicationController {
             @RequestBody ApplicationEntity app
     ) {
 
-        ApplicationEntity updated = applicationService.updateApp(id, app);
-
         return ResponseEntity.ok(
                 ApiResponse.builder()
                         .status(200)
                         .message("App updated successfully")
-                        .data(updated)
+                        .data(applicationService.updateApp(id, app))
                         .build()
         );
     }
@@ -104,24 +117,24 @@ public class ApplicationController {
         );
     }
 
-    // ================= OPEN APP (USER ACTION) =================
+    // ================= OPEN APP =================
     @PostMapping("/open")
-    public ResponseEntity<?> openApp(@RequestBody Map<String, Long> body) {
+    public ResponseEntity<?> openApp(
+            Authentication auth,
+            @RequestBody Map<String, Long> body
+    ) {
+
+        if (auth == null || auth.getName() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
+        }
 
         Long appId = body.get("appId");
 
         if (appId == null) {
-            return ResponseEntity.badRequest().body(
-                    ApiResponse.builder()
-                            .status(400)
-                            .message("appId is required")
-                            .data(null)
-                            .build()
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "appId is required");
         }
 
-        // 🔥 call service (you should implement tracking inside service)
-        applicationService.openApp(appId);
+        applicationService.openApp(appId, auth.getName());
 
         return ResponseEntity.ok(
                 ApiResponse.builder()

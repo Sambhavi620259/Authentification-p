@@ -21,18 +21,36 @@ public class DashboardController {
 
     private final DashboardService dashboardService;
 
+    // ================= HELPER =================
+    private String getEmail(Authentication auth) {
+        if (auth == null || auth.getName() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
+        }
+        return auth.getName();
+    }
+
+    // ================= MAIN DASHBOARD (🔥 IMPORTANT) =================
+    @GetMapping
+    public ResponseEntity<?> dashboard(Authentication auth) {
+
+        String email = getEmail(auth);
+
+        log.info("📊 Dashboard for {}", email);
+
+        return ResponseEntity.ok(
+                ApiResponse.builder()
+                        .status(200)
+                        .message("Dashboard fetched")
+                        .data(dashboardService.getSummaryByEmail(email))
+                        .build()
+        );
+    }
+
     // ================= SUMMARY =================
     @GetMapping("/summary")
     public ResponseEntity<ApiResponse<DashboardSummaryResponse>> getSummary(Authentication auth) {
 
-        // ✅ SAFE AUTH CHECK
-        if (auth == null || auth.getName() == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
-        }
-
-        String email = auth.getName();
-
-        log.info("📊 Fetching dashboard summary for {}", email);
+        String email = getEmail(auth);
 
         DashboardSummaryResponse response =
                 dashboardService.getSummaryByEmail(email);
@@ -51,16 +69,12 @@ public class DashboardController {
     public ResponseEntity<ApiResponse<Page<TransactionResponse>>> getTransactions(
             Authentication auth,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "10") int size
+    ) {
 
-        // ✅ SAFE AUTH CHECK
-        if (auth == null || auth.getName() == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
-        }
+        String email = getEmail(auth);
 
-        String email = auth.getName();
-
-        log.info("💰 Fetching transactions for {} | page={} size={}", email, page, size);
+        log.info("💰 Transactions for {} | page={} size={}", email, page, size);
 
         Page<TransactionResponse> response =
                 dashboardService.getTransactionsByEmail(email, page, size);
@@ -68,8 +82,27 @@ public class DashboardController {
         return ResponseEntity.ok(
                 ApiResponse.<Page<TransactionResponse>>builder()
                         .status(200)
-                        .message("Transactions fetched") // ✅ REQUIRED FORMAT
-                        .data(response) // ✅ RETURN FULL PAGE (IMPORTANT)
+                        .message("Transactions fetched")
+                        .data(response)
+                        .build()
+        );
+    }
+
+    // ================= ACTIVITY (🔥 OPTIONAL BUT IMPORTANT) =================
+    @GetMapping("/activity")
+    public ResponseEntity<?> getActivity(
+            Authentication auth,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+
+        String email = getEmail(auth);
+
+        return ResponseEntity.ok(
+                ApiResponse.builder()
+                        .status(200)
+                        .message("Activity fetched")
+                        .data(dashboardService.getActivity(email, page, size))
                         .build()
         );
     }
