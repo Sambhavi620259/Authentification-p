@@ -1,12 +1,12 @@
 package in.bawvpl.Authify.controller;
 
-import in.bawvpl.Authify.entity.ApplicationEntity;
 import in.bawvpl.Authify.io.ApiResponse;
 import in.bawvpl.Authify.service.AppService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -25,48 +25,73 @@ public class ApplicationController {
 
     private final AppService applicationService;
 
+    // ================= HELPER =================
+    private String getEmail(Authentication auth) {
+        if (auth == null || auth.getName() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
+        }
+        return auth.getName().toLowerCase().trim();
+    }
+
     // ================= CREATE (ADMIN ONLY) =================
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
-    public ResponseEntity<?> create(@RequestBody ApplicationEntity app) {
+    public ResponseEntity<?> create(@RequestBody Map<String, Object> body) {
 
         return ResponseEntity.ok(
                 ApiResponse.builder()
                         .status(200)
                         .message("App created successfully")
-                        .data(applicationService.createApp(app))
+                        .data(applicationService.createApp(body))
                         .build()
         );
     }
 
-    // ================= GET ALL (FRONTEND) =================
+    // ================= GET ALL (PAGINATED) =================
     @GetMapping("/list")
-    public ResponseEntity<?> list() {
+    public ResponseEntity<?> list(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+
+        Page<?> result = applicationService.getAllApps(page, size);
 
         return ResponseEntity.ok(
                 ApiResponse.builder()
                         .status(200)
                         .message("Apps fetched")
-                        .data(applicationService.getAllApps())
+                        .data(result.getContent())
+                        .meta(Map.of(
+                                "page", page,
+                                "size", size,
+                                "totalPages", result.getTotalPages(),
+                                "totalElements", result.getTotalElements()
+                        ))
                         .build()
         );
     }
 
-    // ================= MY APPS =================
+    // ================= MY APPS (PAGINATED) =================
     @GetMapping("/my")
-    public ResponseEntity<?> myApps(Authentication auth) {
+    public ResponseEntity<?> myApps(
+            Authentication auth,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
 
-        if (auth == null || auth.getName() == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
-        }
-
-        String email = auth.getName();
+        Page<?> result = applicationService.getAppsByUser(getEmail(auth), page, size);
 
         return ResponseEntity.ok(
                 ApiResponse.builder()
                         .status(200)
                         .message("My apps fetched")
-                        .data(applicationService.getAppsByUser(email))
+                        .data(result.getContent())
+                        .meta(Map.of(
+                                "page", page,
+                                "size", size,
+                                "totalPages", result.getTotalPages(),
+                                "totalElements", result.getTotalElements()
+                        ))
                         .build()
         );
     }
@@ -89,19 +114,19 @@ public class ApplicationController {
     @PutMapping("/{id}")
     public ResponseEntity<?> update(
             @PathVariable Long id,
-            @RequestBody ApplicationEntity app
+            @RequestBody Map<String, Object> body
     ) {
 
         return ResponseEntity.ok(
                 ApiResponse.builder()
                         .status(200)
                         .message("App updated successfully")
-                        .data(applicationService.updateApp(id, app))
+                        .data(applicationService.updateApp(id, body))
                         .build()
         );
     }
 
-    // ================= DELETE (ADMIN ONLY) =================
+    // ================= DELETE (SOFT DELETE) =================
     @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     public ResponseEntity<?> delete(@PathVariable Long id) {
@@ -124,17 +149,13 @@ public class ApplicationController {
             @RequestBody Map<String, Long> body
     ) {
 
-        if (auth == null || auth.getName() == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
-        }
-
         Long appId = body.get("appId");
 
         if (appId == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "appId is required");
         }
 
-        applicationService.openApp(appId, auth.getName());
+        applicationService.openApp(appId, getEmail(auth));
 
         return ResponseEntity.ok(
                 ApiResponse.builder()

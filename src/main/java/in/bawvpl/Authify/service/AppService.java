@@ -1,22 +1,20 @@
 package in.bawvpl.Authify.service;
 
-import in.bawvpl.Authify.entity.ApplicationEntity;
-import in.bawvpl.Authify.entity.UserApplicationEntity;
-import in.bawvpl.Authify.entity.UserEntity;
-import in.bawvpl.Authify.repository.ApplicationRepository;
-import in.bawvpl.Authify.repository.UserApplicationRepository;
-import in.bawvpl.Authify.repository.UserRepository;
+import in.bawvpl.Authify.entity.*;
+import in.bawvpl.Authify.io.*;
+import in.bawvpl.Authify.repository.*;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import org.springframework.data.domain.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
-import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -29,95 +27,135 @@ public class AppService {
 
     // ================= CREATE =================
     @Transactional
-    public ApplicationEntity createApp(ApplicationEntity app) {
+    public ApplicationResponse createApp(Map<String, Object> body) {
+
+        ApplicationEntity app = new ApplicationEntity();
+
+        app.setAppName((String) body.get("appName"));
+        app.setAppType((String) body.get("appType"));
+        app.setAppText((String) body.get("appText"));
+        app.setAppUrl((String) body.get("appUrl"));
+        app.setAppLogo((String) body.get("appLogo"));
+        app.setStatus("ACTIVE");
 
         validateApp(app);
 
-        ApplicationEntity saved = applicationRepository.save(app);
-
-        log.info("App created: {}", saved.getAppName());
-
-        return saved;
+        return toResponse(applicationRepository.save(app));
     }
 
     // ================= GET ALL =================
-    public List<ApplicationEntity> getAllApps() {
-        return applicationRepository.findAll();
+    public Page<ApplicationResponse> getAllApps(int page, int size) {
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by("appId").descending());
+
+        return applicationRepository
+                .findByStatus("ACTIVE", pageable)
+                .map(this::toResponse);
     }
 
     // ================= GET ONE =================
-    public ApplicationEntity getApp(Long id) {
+    public ApplicationResponse getApp(Long id) {
+
         return applicationRepository.findById(id)
+                .map(this::toResponse)
                 .orElseThrow(() ->
                         new ResponseStatusException(HttpStatus.NOT_FOUND, "App not found"));
     }
 
     // ================= GET USER APPS =================
-    public List<UserApplicationEntity> getAppsByUser(String email) {
+    public Page<MyAppResponse> getAppsByUser(String email, int page, int size) {
 
-        UserEntity user = userRepository.findByEmailIgnoreCase(email)
+        final String normalizedEmail = email.toLowerCase().trim();
+
+        UserEntity user = userRepository.findByEmailIgnoreCase(normalizedEmail)
                 .orElseThrow(() ->
                         new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
-        // ✅ FIXED METHOD NAME
-        return userAppRepo.findAllByUser_Id(user.getId());
+        Pageable pageable = PageRequest.of(page, size, Sort.by("updatedAt").descending());
+
+        return userAppRepo.findAllByUser_Id(user.getId(), pageable)
+                .map(ua -> MyAppResponse.builder()
+                        .appId(ua.getApp().getAppId())
+                        .appName(ua.getApp().getAppName())
+                        .appLogo(ua.getApp().getAppLogo())
+                        .appUrl(ua.getApp().getAppUrl())
+                        .visitCounter(
+                                ua.getVisitCounter() == null ? 0 : ua.getVisitCounter()
+                        )
+                        .subscriptionStatus(ua.getSubscriptionStatus())
+                        .updatedAt(ua.getUpdatedAt())
+                        .build()
+                );
     }
 
     // ================= UPDATE =================
     @Transactional
-    public ApplicationEntity updateApp(Long id, ApplicationEntity updated) {
+    public ApplicationResponse updateApp(Long id, Map<String, Object> body) {
 
-        ApplicationEntity app = getApp(id);
+        ApplicationEntity app = applicationRepository.findById(id)
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "App not found"));
 
-        if (updated.getAppName() != null && !updated.getAppName().isBlank()) {
-            app.setAppName(updated.getAppName());
-        }
+        if (body.get("appName") != null)
+            app.setAppName((String) body.get("appName"));
 
-        if (updated.getAppType() != null) {
-            app.setAppType(updated.getAppType());
-        }
+        if (body.get("appType") != null)
+            app.setAppType((String) body.get("appType"));
 
-        if (updated.getAppText() != null) {
-            app.setAppText(updated.getAppText());
-        }
+        if (body.get("appText") != null)
+            app.setAppText((String) body.get("appText"));
 
-        if (updated.getAppUrl() != null && !updated.getAppUrl().isBlank()) {
-            app.setAppUrl(updated.getAppUrl());
-        }
+        if (body.get("appUrl") != null)
+            app.setAppUrl((String) body.get("appUrl"));
 
-        if (updated.getAppLogo() != null) {
-            app.setAppLogo(updated.getAppLogo());
-        }
+        if (body.get("appLogo") != null)
+            app.setAppLogo((String) body.get("appLogo"));
 
-        if (updated.getStatus() != null && !updated.getStatus().isBlank()) {
-            app.setStatus(updated.getStatus());
-        }
+        if (body.get("status") != null)
+            app.setStatus((String) body.get("status"));
 
-        return applicationRepository.save(app);
+        return toResponse(applicationRepository.save(app));
     }
 
     // ================= DELETE =================
     @Transactional
     public void deleteApp(Long id) {
-        applicationRepository.delete(getApp(id));
+
+        ApplicationEntity app = applicationRepository.findById(id)
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "App not found"));
+
+        app.setStatus("DELETED");
+
+        applicationRepository.save(app);
     }
 
     // ================= OPEN APP =================
     @Transactional
     public void openApp(Long appId, String email) {
 
-        UserEntity user = userRepository.findByEmailIgnoreCase(email)
+        final String normalizedEmail = email.toLowerCase().trim();
+
+        UserEntity user = userRepository.findByEmailIgnoreCase(normalizedEmail)
                 .orElseThrow(() ->
                         new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
-        ApplicationEntity app = getApp(appId);
+        ApplicationEntity app = applicationRepository.findById(appId)
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "App not found"));
+
+        if (!"ACTIVE".equalsIgnoreCase(app.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "App not active");
+        }
 
         UserApplicationEntity ua = userAppRepo
                 .findByUser_IdAndApp_AppId(user.getId(), appId)
                 .orElse(null);
 
         if (ua != null) {
-            ua.setVisitCounter(ua.getVisitCounter() + 1);
+            ua.setVisitCounter(
+                    ua.getVisitCounter() == null ? 1 : ua.getVisitCounter() + 1
+            );
             ua.setUpdatedAt(LocalDateTime.now());
         } else {
             ua = UserApplicationEntity.builder()
@@ -131,8 +169,18 @@ public class AppService {
         }
 
         userAppRepo.save(ua);
+    }
 
-        log.info("App opened by user {} for app {}", user.getId(), appId);
+    // ================= MAPPER =================
+    private ApplicationResponse toResponse(ApplicationEntity app) {
+        return ApplicationResponse.builder()
+                .appId(app.getAppId())
+                .appName(app.getAppName())
+                .appType(app.getAppType())
+                .appUrl(app.getAppUrl())
+                .appLogo(app.getAppLogo())
+                .status(app.getStatus())
+                .build();
     }
 
     // ================= VALIDATION =================

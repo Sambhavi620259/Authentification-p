@@ -10,7 +10,8 @@ import java.time.Instant;
 @Table(
         name = "kyc",
         indexes = {
-                @Index(name = "idx_kyc_user", columnList = "user_id")
+                @Index(name = "idx_kyc_user", columnList = "user_id"),
+                @Index(name = "idx_kyc_status", columnList = "status")
         }
 )
 @Getter
@@ -25,22 +26,23 @@ public class KycEntity {
     private Long id;
 
     // ================= DOCUMENT =================
-    @Column(name = "document_type", nullable = false)
+    @Column(name = "document_type", nullable = false, length = 50)
     private String documentType;
 
     @Column(name = "document_number", nullable = false, length = 50)
     private String documentNumber;
 
-    @Column(name = "file_path", nullable = false)
+    @Column(name = "file_path", nullable = false, length = 500)
     private String filePath;
 
     // ================= STATUS =================
-    @Column(name = "status", nullable = false)
-    private String status; // PENDING / VERIFIED / REJECTED
+    @Builder.Default
+    @Column(name = "status", nullable = false, length = 20)
+    private String status = "PENDING"; // PENDING / VERIFIED / REJECTED
 
-    // ✅ ADD THIS FIELD (IMPORTANT)
+    @Builder.Default
     @Column(name = "completed", nullable = false)
-    private Boolean completed;
+    private Boolean completed = false;
 
     // ================= TIMESTAMPS =================
     @Column(name = "uploaded_at", nullable = false, updatable = false)
@@ -52,7 +54,7 @@ public class KycEntity {
     // ================= RELATION =================
     @OneToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false, unique = true)
-    @JsonIgnore
+    @JsonIgnore // ✅ VERY IMPORTANT (fixes Hibernate proxy error)
     private UserEntity user;
 
     // ================= AUTO =================
@@ -71,7 +73,6 @@ public class KycEntity {
             this.status = "PENDING";
         }
 
-        // ✅ DEFAULT VALUE
         if (this.completed == null) {
             this.completed = false;
         }

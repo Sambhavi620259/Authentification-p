@@ -19,8 +19,10 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@ToString(exclude = {"user"}) // ✅ avoid lazy loading / recursion issues
 public class ApplicationEntity {
 
+    // ================= ID =================
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "app_id")
@@ -42,16 +44,16 @@ public class ApplicationEntity {
     @Column(name = "app_text", length = 500)
     private String appText;
 
-    @Column(name = "app_url", nullable = false)
+    @Column(name = "app_url", nullable = false, length = 500)
     private String appUrl;
 
-    @Column(name = "app_logo")
+    @Column(name = "app_logo", length = 500)
     private String appLogo;
 
     // ================= STATUS =================
     @Builder.Default
     @Column(name = "status", nullable = false, length = 20)
-    private String status = "ACTIVE";
+    private String status = "ACTIVE"; // ACTIVE / DELETED / INACTIVE
 
     // ================= TIMESTAMP =================
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -60,9 +62,10 @@ public class ApplicationEntity {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    // ================= AUTO =================
+    // ================= LIFECYCLE =================
     @PrePersist
     protected void onCreate() {
+
         LocalDateTime now = LocalDateTime.now();
 
         if (this.createdAt == null) {

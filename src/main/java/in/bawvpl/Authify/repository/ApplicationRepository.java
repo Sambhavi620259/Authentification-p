@@ -1,16 +1,33 @@
 package in.bawvpl.Authify.repository;
 
 import in.bawvpl.Authify.entity.ApplicationEntity;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-
-import java.util.List;
 
 public interface ApplicationRepository extends JpaRepository<ApplicationEntity, Long> {
 
+    // ================= USER =================
     long countByUser_Id(Long userId);
 
-    List<ApplicationEntity> findByUser_Id(Long userId);
+    Page<ApplicationEntity> findByUser_Id(Long userId, Pageable pageable);
 
-    // 🔥 FIXED SEARCH METHOD
-    List<ApplicationEntity> findByAppNameContainingIgnoreCase(String appName);
+    // ================= STATUS =================
+    Page<ApplicationEntity> findByStatus(String status, Pageable pageable);
+
+    // ✅ Optional (useful for non-paginated cases)
+    boolean existsByIdAndStatus(Long id, String status);
+
+    // ================= SEARCH =================
+    Page<ApplicationEntity> findByAppNameContainingIgnoreCase(
+            String appName,
+            Pageable pageable
+    );
+
+    // ================= FILTER + SEARCH =================
+    Page<ApplicationEntity> findByStatusAndAppNameContainingIgnoreCase(
+            String status,
+            String appName,
+            Pageable pageable
+    );
 }

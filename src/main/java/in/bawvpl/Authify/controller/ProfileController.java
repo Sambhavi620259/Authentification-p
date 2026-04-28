@@ -12,6 +12,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.nio.file.*;
@@ -79,31 +81,34 @@ public class ProfileController {
         return ResponseEntity.ok(response);
     }
 
-    // ================= GET PROFILE (ALIAS FIX) =================
-    // 👉 This solves your /profile/me error
-    @GetMapping("/me")
-    public ResponseEntity<?> getProfileAlias(Authentication auth) {
-        return getProfile(auth);
-    }
-
-    // ================= UPDATE PROFILE =================
-    @PutMapping("/update")
+    // ================= UPDATE PROFILE (🔥 FIXED) =================
+    @PutMapping
     public ResponseEntity<?> updateProfile(
             Authentication auth,
-            @RequestBody Map<String, String> req
+            @RequestBody(required = false) Map<String, String> body
     ) {
+
+        // ✅ AUTH CHECK
+        if (auth == null || auth.getName() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
+        }
+
+        // ✅ BODY CHECK (fixes your error)
+        if (body == null || body.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Request body required");
+        }
 
         String email = auth.getName().toLowerCase().trim();
 
         UserEntity user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
-        if (req.containsKey("name")) {
-            user.setEntityName(req.get("name"));
+        if (body.containsKey("name")) {
+            user.setEntityName(body.get("name"));
         }
 
-        if (req.containsKey("phoneNumber")) {
-            user.setPhoneNumber(req.get("phoneNumber"));
+        if (body.containsKey("phoneNumber")) {
+            user.setPhoneNumber(body.get("phoneNumber"));
         }
 
         userRepository.save(user);

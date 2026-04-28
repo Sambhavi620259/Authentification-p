@@ -18,6 +18,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -32,14 +34,19 @@ public class CartServiceImpl implements CartItemService {
     @Transactional
     public CartItemResponse addItem(String email, CartItemRequest req) {
 
-        email = email.toLowerCase().trim();
+        final String normalizedEmail = email.toLowerCase().trim();
 
-        UserEntity user = userRepository.findByEmailIgnoreCase(email)
+        UserEntity user = userRepository.findByEmailIgnoreCase(normalizedEmail)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
+        // ✅ Auto-create cart (FIXED lambda issue)
         Cart cart = cartRepository.findByUser(user)
-                .orElseGet(() -> cartRepository.save(Cart.builder().user(user).build()));
+                .orElseGet(() -> {
+                    log.info("Creating new cart for user: {}", normalizedEmail);
+                    return cartRepository.save(Cart.builder().user(user).build());
+                });
 
+        // ✅ Validations
         if (req.getProductId() == null || req.getProductId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product ID required");
         }
@@ -52,6 +59,7 @@ public class CartServiceImpl implements CartItemService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid price");
         }
 
+        // ✅ Check if item already exists
         CartItem existing = cartItemRepository
                 .findByCartAndProductId(cart, req.getProductId())
                 .orElse(null);
@@ -59,9 +67,13 @@ public class CartServiceImpl implements CartItemService {
         if (existing != null) {
             existing.setQuantity(existing.getQuantity() + req.getQuantity());
             existing.setPrice(req.getPrice());
+
+            log.info("Updated existing cart item for product: {}", req.getProductId());
+
             return toResponse(cartItemRepository.save(existing));
         }
 
+        // ✅ Create new item
         CartItem item = CartItem.builder()
                 .cart(cart)
                 .productId(req.getProductId())
@@ -70,6 +82,8 @@ public class CartServiceImpl implements CartItemService {
                 .quantity(req.getQuantity())
                 .build();
 
+        log.info("Added new item to cart: {}", req.getProductId());
+
         return toResponse(cartItemRepository.save(item));
     }
 
@@ -77,13 +91,23 @@ public class CartServiceImpl implements CartItemService {
     @Override
     public Page<CartItemResponse> getItemsForUser(String email, int page, int size) {
 
-        email = email.toLowerCase().trim();
+        final String normalizedEmail = email.toLowerCase().trim();
 
-        UserEntity user = userRepository.findByEmailIgnoreCase(email)
+        UserEntity user = userRepository.findByEmailIgnoreCase(normalizedEmail)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
-        Cart cart = cartRepository.findByUser(user)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cart not found"));
+        // ✅ Don't throw error if cart doesn't exist
+        Cart cart = cartRepository.findByUser(user).orElse(null);
+
+        if (cart == null) {
+            log.info("No cart found for user: {}", normalizedEmail);
+
+            return new PageImpl<>(
+                    List.of(),
+                    PageRequest.of(page, size),
+                    0
+            );
+        }
 
         Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
 
@@ -97,19 +121,25 @@ public class CartServiceImpl implements CartItemService {
     @Transactional
     public void removeItem(String email, String productId) {
 
-        email = email.toLowerCase().trim();
+        final String normalizedEmail = email.toLowerCase().trim();
 
-        UserEntity user = userRepository.findByEmailIgnoreCase(email)
+        UserEntity user = userRepository.findByEmailIgnoreCase(normalizedEmail)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
-        Cart cart = cartRepository.findByUser(user)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cart not found"));
+        Cart cart = cartRepository.findByUser(user).orElse(null);
+
+        if (cart == null) {
+            log.warn("Attempt to remove item from non-existing cart for user: {}", normalizedEmail);
+            return;
+        }
 
         CartItem item = cartItemRepository
                 .findByCartAndProductId(cart, productId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Item not found"));
 
         cartItemRepository.delete(item);
+
+        log.info("Removed item {} from cart", productId);
     }
 
     // ================= MAPPER =================

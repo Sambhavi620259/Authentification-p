@@ -1,21 +1,25 @@
 package in.bawvpl.Authify.repository;
 
 import in.bawvpl.Authify.entity.FavoriteEntity;
-import in.bawvpl.Authify.entity.UserEntity;
-import in.bawvpl.Authify.entity.ApplicationEntity;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
 
+@Repository
 public interface FavoriteRepository extends JpaRepository<FavoriteEntity, Long> {
 
-    List<FavoriteEntity> findByUserOrderByCreatedAtDesc(UserEntity user);
+    // ================= EXISTS =================
+    boolean existsByUser_IdAndApp_AppId(Long userId, Long appId);
 
-    Optional<FavoriteEntity> findByUserAndApp(UserEntity user, ApplicationEntity app);
+    // ================= GET =================
+    List<FavoriteEntity> findByUser_Id(Long userId);
 
-    void deleteByUserAndApp(UserEntity user, ApplicationEntity app);
+    // ================= FIND ONE =================
+    Optional<FavoriteEntity> findByUser_IdAndApp_AppId(Long userId, Long appId);
 
-    boolean existsByUserAndApp(UserEntity user, ApplicationEntity app);
+    // ================= DELETE =================
+    void deleteByUser_IdAndApp_AppId(Long userId, Long appId);
 }

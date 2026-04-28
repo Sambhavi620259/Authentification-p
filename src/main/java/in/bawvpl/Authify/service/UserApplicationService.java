@@ -10,6 +10,8 @@ import in.bawvpl.Authify.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,18 +34,21 @@ public class UserApplicationService {
     @Transactional
     public UserApplicationEntity applyApp(String email, Long appId) {
 
-        email = normalizeEmail(email);
+        final String normalizedEmail = normalizeEmail(email);
 
-        UserEntity user = getUserByEmail(email);
+        UserEntity user = getUserByEmail(normalizedEmail);
         ApplicationEntity app = getAppById(appId);
 
-        userAppRepository.findByUser_IdAndApp_AppId(user.getId(), appId)
-                .ifPresent(existing -> {
-                    throw new ResponseStatusException(
-                            HttpStatus.BAD_REQUEST,
-                            "User already applied for this app"
-                    );
-                });
+        if (!"ACTIVE".equalsIgnoreCase(app.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "App not active");
+        }
+
+        if (userAppRepository.existsByUser_IdAndApp_AppId(user.getId(), appId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "User already applied for this app"
+            );
+        }
 
         UserApplicationEntity entity = UserApplicationEntity.builder()
                 .user(user)
@@ -52,19 +57,15 @@ public class UserApplicationService {
                 .visitCounter(0)
                 .build();
 
-        UserApplicationEntity saved = userAppRepository.save(entity);
-
-        log.info("User [{}] applied for app [{}]", email, appId);
-
-        return saved;
+        return userAppRepository.save(entity);
     }
 
     // ================= GET USER APP =================
     public UserApplicationEntity getUserApp(String email, Long appId) {
 
-        email = normalizeEmail(email);
+        final String normalizedEmail = normalizeEmail(email);
 
-        UserEntity user = getUserByEmail(email);
+        UserEntity user = getUserByEmail(normalizedEmail);
 
         return userAppRepository
                 .findByUser_IdAndApp_AppId(user.getId(), appId)
@@ -73,19 +74,24 @@ public class UserApplicationService {
                 );
     }
 
-    // ================= GET ALL APPS =================
+    // ================= GET ALL APPS (FIXED) =================
     public List<ApplicationEntity> getAllApps() {
-        return applicationRepository.findAll();
+
+        Pageable pageable = PageRequest.of(0, 50); // default limit
+
+        return applicationRepository
+                .findByStatus("ACTIVE", pageable)
+                .getContent();
     }
 
     // ================= GET USER APPLICATIONS =================
     public List<UserApplicationEntity> getUserApplications(String email) {
 
-        email = normalizeEmail(email);
+        final String normalizedEmail = normalizeEmail(email);
 
-        UserEntity user = getUserByEmail(email);
+        UserEntity user = getUserByEmail(normalizedEmail);
 
-        return userAppRepository.findAllByUser(user);
+        return userAppRepository.findAllByUser_Id(user.getId());
     }
 
     // ================= HELPERS =================
@@ -98,13 +104,17 @@ public class UserApplicationService {
     }
 
     private UserEntity getUserByEmail(String email) {
-        return userRepository.findByEmail(email)
+        return userRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() ->
                         new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found")
                 );
     }
 
     private ApplicationEntity getAppById(Long appId) {
+        if (appId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "appId required");
+        }
+
         return applicationRepository.findById(appId)
                 .orElseThrow(() ->
                         new ResponseStatusException(HttpStatus.NOT_FOUND, "App not found")

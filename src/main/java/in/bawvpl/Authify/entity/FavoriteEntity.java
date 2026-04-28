@@ -1,5 +1,6 @@
 package in.bawvpl.Authify.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -23,20 +24,22 @@ public class FavoriteEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // ================= USER =================
-    @ManyToOne(fetch = FetchType.LAZY)
+    // 🔥 USER
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
+    @JsonIgnore
     private UserEntity user;
 
-    // ================= APP =================
-    @ManyToOne(fetch = FetchType.LAZY)
+    // 🔥 APP
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "app_id", nullable = false)
     private ApplicationEntity app;
 
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     @PrePersist
-    public void onCreate() {
+    protected void onCreate() {
         if (createdAt == null) {
             createdAt = LocalDateTime.now();
         }

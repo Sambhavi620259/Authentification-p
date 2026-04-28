@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 @Table(
         name = "user_applications",
         uniqueConstraints = {
-                @UniqueConstraint(columnNames = {"user_id", "app_id"})
+                @UniqueConstraint(name = "uk_user_app", columnNames = {"user_id", "app_id"})
         },
         indexes = {
                 @Index(name = "idx_user_app", columnList = "user_id, app_id")
@@ -21,6 +21,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@ToString(exclude = {"user", "app"}) // ✅ avoid recursion issues
 public class UserApplicationEntity {
 
     @Id
@@ -28,18 +29,16 @@ public class UserApplicationEntity {
     private Long id;
 
     // ================= USER =================
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
-    @ToString.Exclude
     @JsonIgnore
     private UserEntity user;
 
     // ================= APPLICATION =================
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "app_id", nullable = false)
-    @ToString.Exclude
     @JsonIgnore
-    private ApplicationEntity app;   // ✅ FIXED
+    private ApplicationEntity app;
 
     // ================= VISIT COUNT =================
     @Builder.Default
@@ -48,12 +47,12 @@ public class UserApplicationEntity {
 
     // ================= SUBSCRIPTION STATUS =================
     @Builder.Default
-    @Column(name = "subscription_status", nullable = false)
+    @Column(name = "subscription_status", nullable = false, length = 20)
     private String subscriptionStatus = "APPLIED";
     // APPLIED / ACTIVE / EXPIRED
 
     // ================= TIMESTAMP =================
-    @Column(name = "created_at", updatable = false, nullable = false)
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     @Column(name = "updated_at")
@@ -61,7 +60,7 @@ public class UserApplicationEntity {
 
     // ================= AUTO =================
     @PrePersist
-    public void prePersist() {
+    protected void onCreate() {
 
         LocalDateTime now = LocalDateTime.now();
 
@@ -81,7 +80,7 @@ public class UserApplicationEntity {
     }
 
     @PreUpdate
-    public void preUpdate() {
+    protected void onUpdate() {
         updatedAt = LocalDateTime.now();
     }
 }
