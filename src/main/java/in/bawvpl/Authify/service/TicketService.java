@@ -1,9 +1,7 @@
 package in.bawvpl.Authify.service;
 
-import in.bawvpl.Authify.entity.TicketEntity;
-import in.bawvpl.Authify.entity.TicketMessageEntity;
-import in.bawvpl.Authify.repository.TicketMessageRepository;
-import in.bawvpl.Authify.repository.TicketRepository;
+import in.bawvpl.Authify.entity.*;
+import in.bawvpl.Authify.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -16,14 +14,19 @@ public class TicketService {
 
     private final TicketRepository ticketRepository;
     private final TicketMessageRepository messageRepository;
+    private final NotificationRepository notificationRepository;
+    private final UserRepository userRepository;
 
-    // ✅ CREATE TICKET
-    public TicketEntity create(Long userId, String subject, String message) {
+    // ================= CREATE =================
+    public TicketEntity create(String email, String subject, String message) {
+
+        UserEntity user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
         TicketEntity ticket = TicketEntity.builder()
-                .userId(userId)
+                .user(user)
                 .subject(subject)
-                .status("OPEN")
+                .status(TicketEntity.Status.OPEN)
                 .createdAt(LocalDateTime.now())
                 .build();
 
@@ -31,7 +34,7 @@ public class TicketService {
 
         messageRepository.save(
                 TicketMessageEntity.builder()
-                        .ticketId(ticket.getId())
+                        .ticket(ticket) // ✅ FIXED
                         .sender("USER")
                         .message(message)
                         .createdAt(LocalDateTime.now())
@@ -41,35 +44,109 @@ public class TicketService {
         return ticket;
     }
 
-    // ✅ LIST
-    public List<TicketEntity> getUserTickets(Long userId) {
-        return ticketRepository.findByUserIdOrderByCreatedAtDesc(userId);
+    // ================= USER TICKETS =================
+    public List<TicketEntity> getUserTickets(String email) {
+
+        UserEntity user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        return ticketRepository.findByUser_IdOrderByCreatedAtDesc(user.getId());
     }
 
-    // ✅ DETAIL
-    public List<TicketMessageEntity> getMessages(Long ticketId) {
-        return messageRepository.findByTicketIdOrderByCreatedAtAsc(ticketId);
+    // ================= GET MESSAGES =================
+    public List<TicketMessageEntity> getMessages(Long ticketId, String email) {
+
+        UserEntity user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        TicketEntity ticket = ticketRepository.findById(ticketId)
+                .orElseThrow(() -> new RuntimeException("Ticket not found"));
+
+        if (!ticket.getUser().getId().equals(user.getId())) {
+            throw new RuntimeException("Unauthorized");
+        }
+
+        return messageRepository.findByTicket_IdOrderByCreatedAtAsc(ticketId);
     }
 
-    // ✅ REPLY
-    public void reply(Long ticketId, String message, String sender) {
+    // ================= USER REPLY =================
+    public void replyUser(Long ticketId, String message, String email) {
+
+        UserEntity user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        TicketEntity ticket = ticketRepository.findById(ticketId)
+                .orElseThrow(() -> new RuntimeException("Ticket not found"));
+
+        if (!ticket.getUser().getId().equals(user.getId())) {
+            throw new RuntimeException("Unauthorized");
+        }
+
+        if (ticket.getStatus() == TicketEntity.Status.CLOSED) {
+            throw new RuntimeException("Ticket closed");
+        }
+
+        ticket.setStatus(TicketEntity.Status.IN_PROGRESS);
+        ticketRepository.save(ticket);
 
         messageRepository.save(
                 TicketMessageEntity.builder()
-                        .ticketId(ticketId)
-                        .sender(sender)
+                        .ticket(ticket) // ✅ FIXED
+                        .sender("USER")
                         .message(message)
                         .createdAt(LocalDateTime.now())
                         .build()
         );
     }
 
-    // ✅ CLOSE
-    public void close(Long ticketId) {
-        TicketEntity t = ticketRepository.findById(ticketId)
+    // ================= ADMIN REPLY =================
+    public void replyAdmin(Long ticketId, String message) {
+
+        TicketEntity ticket = ticketRepository.findById(ticketId)
                 .orElseThrow(() -> new RuntimeException("Ticket not found"));
 
-        t.setStatus("CLOSED");
-        ticketRepository.save(t);
+        if (ticket.getStatus() == TicketEntity.Status.CLOSED) {
+            throw new RuntimeException("Ticket closed");
+        }
+
+        ticket.setStatus(TicketEntity.Status.IN_PROGRESS);
+        ticketRepository.save(ticket);
+
+        messageRepository.save(
+                TicketMessageEntity.builder()
+                        .ticket(ticket) // ✅ FIXED
+                        .sender("ADMIN")
+                        .message(message)
+                        .createdAt(LocalDateTime.now())
+                        .build()
+        );
+
+        // 🔔 Notification
+        notificationRepository.save(
+                NotificationEntity.builder()
+                        .user(ticket.getUser())
+                        .title("Ticket Update")
+                        .message("Admin replied to your ticket")
+                        .read(false)
+                        .createdAt(LocalDateTime.now())
+                        .build()
+        );
+    }
+
+    // ================= CLOSE =================
+    public void close(Long ticketId, String email) {
+
+        UserEntity user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        TicketEntity ticket = ticketRepository.findById(ticketId)
+                .orElseThrow(() -> new RuntimeException("Ticket not found"));
+
+        if (!ticket.getUser().getId().equals(user.getId())) {
+            throw new RuntimeException("Unauthorized");
+        }
+
+        ticket.setStatus(TicketEntity.Status.CLOSED);
+        ticketRepository.save(ticket);
     }
 }

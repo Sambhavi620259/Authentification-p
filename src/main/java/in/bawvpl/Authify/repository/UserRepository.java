@@ -11,24 +11,19 @@ public interface UserRepository extends JpaRepository<UserEntity, Long> {
 
     // ================= AUTH =================
 
-    // ✅ OLD METHODS (KEEP THESE — REQUIRED FOR YOUR CODE)
-    Optional<UserEntity> findByEmail(String email);
+    Optional<UserEntity> findByEmail(String email); // legacy
+    Optional<UserEntity> findByEmailIgnoreCase(String email); // ✅ USE THIS
 
     boolean existsByEmail(String email);
-
-    // ✅ NEW METHODS (FOR FUTURE / SAFE USE)
-    Optional<UserEntity> findByEmailIgnoreCase(String email);
-
     boolean existsByEmailIgnoreCase(String email);
 
     // ================= PHONE =================
 
     boolean existsByPhoneNumber(String phoneNumber);
-
     Optional<UserEntity> findByPhoneNumber(String phoneNumber);
 
-    // ================= USER =================
-
+    // ================= OPTIONAL =================
+    // ⚠️ USE ONLY IF YOU REALLY HAVE STRING userId FIELD
     Optional<UserEntity> findByUserId(String userId);
 
     // ================= EMAIL VERIFICATION =================

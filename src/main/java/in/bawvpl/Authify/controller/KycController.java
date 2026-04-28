@@ -31,56 +31,76 @@ public class KycController {
     private static final String VERIFIED = "VERIFIED";
     private static final String REJECTED = "REJECTED";
 
-    // ================= GET ALL (ADMIN ONLY) =================
+    // ================= UPLOAD =================
+    @PostMapping("/upload")
+    public ResponseEntity<ApiResponse<KycEntity>> upload(
+            Authentication auth,
+            @RequestParam String documentType,
+            @RequestParam String documentNumber,
+            @RequestParam String filePath   // 🔥 for now (later use MultipartFile)
+    ) {
+
+        String email = auth.getName();
+
+        UserEntity user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        if (kycRepository.existsByUser_Id(user.getId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "KYC already submitted");
+        }
+
+        KycEntity kyc = KycEntity.builder()
+                .user(user)
+                .documentType(documentType)
+                .documentNumber(documentNumber)
+                .filePath(filePath)
+                .status(PENDING)
+                .completed(false)
+                .build();
+
+        kycRepository.save(kyc);
+
+        return ok("KYC submitted", kyc);
+    }
+
+    // ================= GET ALL (ADMIN) =================
     @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/all")
     public ResponseEntity<ApiResponse<List<KycEntity>>> getAllKyc() {
 
-        List<KycEntity> list = kycRepository.findAll();
-
-        return ok("All KYC fetched", list);
+        return ok("All KYC fetched", kycRepository.findAllByOrderByUploadedAtDesc());
     }
 
-    // ================= GET PENDING (ADMIN ONLY) =================
+    // ================= GET PENDING =================
     @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/pending")
     public ResponseEntity<ApiResponse<List<KycEntity>>> getPendingKyc() {
 
-        List<KycEntity> list = kycRepository.findByStatusIgnoreCase(PENDING);
-
-        return ok("Pending KYC fetched", list);
+        return ok("Pending KYC fetched", kycRepository.findByStatusIgnoreCase(PENDING));
     }
 
     // ================= GET MY KYC =================
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<KycEntity>> getMyKyc(Authentication auth) {
 
-        if (auth == null || auth.getName() == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
-        }
-
         String email = auth.getName();
 
-        UserEntity user = userRepository.findByEmail(email)
-                .orElseThrow(() ->
-                        new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        UserEntity user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
         KycEntity kyc = kycRepository.findByUser(user)
-                .orElseThrow(() ->
-                        new ResponseStatusException(HttpStatus.NOT_FOUND, "KYC not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "KYC not found"));
 
         return ok("KYC fetched", kyc);
     }
 
-    // ================= VERIFY (ADMIN ONLY) =================
+    // ================= VERIFY =================
     @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/verify/{userId}")
-    public ResponseEntity<ApiResponse<String>> verifyKyc(@PathVariable String userId) {
+    public ResponseEntity<ApiResponse<String>> verifyKyc(@PathVariable Long userId) {
 
-        log.info("VERIFY KYC for {}", userId);
-
-        UserEntity user = getUserOrThrow(userId);
-        KycEntity kyc = getKycOrThrow(user);
+        UserEntity user = getUser(userId);
+        KycEntity kyc = getKyc(user);
 
         kyc.setStatus(VERIFIED);
         kyc.setCompleted(true);
@@ -92,15 +112,13 @@ public class KycController {
         return ok("KYC VERIFIED", VERIFIED);
     }
 
-    // ================= REJECT (ADMIN ONLY) =================
+    // ================= REJECT =================
     @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/reject/{userId}")
-    public ResponseEntity<ApiResponse<String>> rejectKyc(@PathVariable String userId) {
+    public ResponseEntity<ApiResponse<String>> rejectKyc(@PathVariable Long userId) {
 
-        log.info("REJECT KYC for {}", userId);
-
-        UserEntity user = getUserOrThrow(userId);
-        KycEntity kyc = getKycOrThrow(user);
+        UserEntity user = getUser(userId);
+        KycEntity kyc = getKyc(user);
 
         kyc.setStatus(REJECTED);
         kyc.setCompleted(false);
@@ -114,22 +132,17 @@ public class KycController {
 
     // ================= HELPERS =================
 
-    private UserEntity getUserOrThrow(String userId) {
-
-        return userRepository.findByUserId(userId)
-                .orElseThrow(() ->
-                        new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+    private UserEntity getUser(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
     }
 
-    private KycEntity getKycOrThrow(UserEntity user) {
-
+    private KycEntity getKyc(UserEntity user) {
         return kycRepository.findByUser(user)
-                .orElseThrow(() ->
-                        new ResponseStatusException(HttpStatus.NOT_FOUND, "KYC not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "KYC not found"));
     }
 
     private <T> ResponseEntity<ApiResponse<T>> ok(String message, T data) {
-
         return ResponseEntity.ok(
                 ApiResponse.<T>builder()
                         .status(200)

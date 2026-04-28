@@ -21,7 +21,6 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/api/v1.0/profile")
 @RequiredArgsConstructor
-@CrossOrigin("*")
 @Slf4j
 public class ProfileController {
 
@@ -34,58 +33,82 @@ public class ProfileController {
     @GetMapping
     public ResponseEntity<?> getProfile(Authentication authentication) {
 
-        try {
-            String email = authentication.getName().toLowerCase().trim();
+        String email = authentication.getName().toLowerCase().trim();
 
-            UserEntity user = userRepository.findByEmail(email)
-                    .orElseThrow(() -> new RuntimeException("User not found"));
+        UserEntity user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
-            Optional<KycEntity> kycOpt = kycRepository.findByUser(user);
+        Optional<KycEntity> kycOpt = kycRepository.findByUser(user);
 
-            String documentType = null;
-            String documentNumber = null;
-            String kycStatus = null;
-            String filePath = null;
-            boolean isKycVerified = false;
+        String documentType = null;
+        String documentNumber = null;
+        String kycStatus = null;
+        String filePath = null;
+        boolean isKycVerified = false;
 
-            if (kycOpt.isPresent()) {
-                KycEntity kyc = kycOpt.get();
+        if (kycOpt.isPresent()) {
+            KycEntity kyc = kycOpt.get();
 
-                documentType = kyc.getDocumentType();
-                documentNumber = kyc.getDocumentNumber();
-                kycStatus = kyc.getStatus();
-                filePath = kyc.getFilePath();
-                isKycVerified = "VERIFIED".equalsIgnoreCase(kyc.getStatus());
-            }
-
-            // ✅ FULL IMAGE URL
-            String photoUrl = null;
-            if (user.getPhotoUrl() != null && !user.getPhotoUrl().isBlank()) {
-                photoUrl = BASE_URL + "/uploads/" + user.getPhotoUrl();
-            }
-
-            ProfileResponse response = ProfileResponse.builder()
-                    .userId(user.getUserId())
-                    .name(user.getEntityName())
-                    .email(user.getEmail())
-                    .phoneNumber(user.getPhoneNumber())
-                    .isAccountVerified(Boolean.TRUE.equals(user.getEmailVerified()))
-                    .isKycVerified(isKycVerified)
-                    .referralCode(user.getReferralCode())
-                    .documentType(documentType)
-                    .documentNumber(documentNumber)
-                    .kycStatus(kycStatus)
-                    .filePath(filePath)
-                    .photoUrl(photoUrl)
-                    .build();
-
-            return ResponseEntity.ok(response);
-
-        } catch (Exception e) {
-            log.error("Profile fetch error: {}", e.getMessage());
-            return ResponseEntity.status(500)
-                    .body(Map.of("message", "Profile fetch failed"));
+            documentType = kyc.getDocumentType();
+            documentNumber = kyc.getDocumentNumber();
+            kycStatus = kyc.getStatus();
+            filePath = kyc.getFilePath();
+            isKycVerified = "VERIFIED".equalsIgnoreCase(kyc.getStatus());
         }
+
+        String photoUrl = null;
+        if (user.getPhotoUrl() != null && !user.getPhotoUrl().isBlank()) {
+            photoUrl = BASE_URL + "/uploads/" + user.getPhotoUrl();
+        }
+
+        ProfileResponse response = ProfileResponse.builder()
+                .userId(user.getUserId())
+                .name(user.getEntityName())
+                .email(user.getEmail())
+                .phoneNumber(user.getPhoneNumber())
+                .isAccountVerified(Boolean.TRUE.equals(user.getEmailVerified()))
+                .isKycVerified(isKycVerified)
+                .referralCode(user.getReferralCode())
+                .documentType(documentType)
+                .documentNumber(documentNumber)
+                .kycStatus(kycStatus)
+                .filePath(filePath)
+                .photoUrl(photoUrl)
+                .build();
+
+        return ResponseEntity.ok(response);
+    }
+
+    // ================= GET PROFILE (ALIAS FIX) =================
+    // 👉 This solves your /profile/me error
+    @GetMapping("/me")
+    public ResponseEntity<?> getProfileAlias(Authentication auth) {
+        return getProfile(auth);
+    }
+
+    // ================= UPDATE PROFILE =================
+    @PutMapping("/update")
+    public ResponseEntity<?> updateProfile(
+            Authentication auth,
+            @RequestBody Map<String, String> req
+    ) {
+
+        String email = auth.getName().toLowerCase().trim();
+
+        UserEntity user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (req.containsKey("name")) {
+            user.setEntityName(req.get("name"));
+        }
+
+        if (req.containsKey("phoneNumber")) {
+            user.setPhoneNumber(req.get("phoneNumber"));
+        }
+
+        userRepository.save(user);
+
+        return ResponseEntity.ok(Map.of("message", "Profile updated"));
     }
 
     // ================= UPLOAD PHOTO =================
@@ -95,29 +118,27 @@ public class ProfileController {
             Authentication authentication
     ) {
 
+        String email = authentication.getName().toLowerCase().trim();
+
+        if (file == null || file.isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("message", "File is empty"));
+        }
+
+        String contentType = file.getContentType();
+        if (contentType == null ||
+                !(contentType.equals("image/jpeg") ||
+                        contentType.equals("image/png") ||
+                        contentType.equals("image/jpg"))) {
+
+            return ResponseEntity.badRequest()
+                    .body(Map.of("message", "Only JPG/PNG allowed"));
+        }
+
         try {
-            String email = authentication.getName().toLowerCase().trim();
-
-            if (file == null || file.isEmpty()) {
-                return ResponseEntity.badRequest()
-                        .body(Map.of("message", "File is empty"));
-            }
-
-            // ✅ FILE TYPE VALIDATION
-            String contentType = file.getContentType();
-            if (contentType == null ||
-                    !(contentType.equals("image/jpeg") ||
-                            contentType.equals("image/png") ||
-                            contentType.equals("image/jpg"))) {
-
-                return ResponseEntity.badRequest()
-                        .body(Map.of("message", "Only JPG/PNG allowed"));
-            }
-
             UserEntity user = userRepository.findByEmail(email)
                     .orElseThrow(() -> new RuntimeException("User not found"));
 
-            // ✅ UNIQUE FILE NAME
             String fileName = System.currentTimeMillis() + "_" +
                     file.getOriginalFilename().replaceAll("\\s+", "_");
 
@@ -131,22 +152,16 @@ public class ProfileController {
 
             Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
 
-            // ✅ SAVE IN DB
             user.setPhotoUrl(fileName);
             userRepository.save(user);
 
-            String fullUrl = BASE_URL + "/uploads/" + fileName;
-
-            log.info("Photo uploaded for {}", email);
-
             return ResponseEntity.ok(Map.of(
                     "message", "Photo uploaded successfully",
-                    "photoUrl", fullUrl
+                    "photoUrl", BASE_URL + "/uploads/" + fileName
             ));
 
         } catch (Exception e) {
             log.error("Upload failed: {}", e.getMessage());
-
             return ResponseEntity.status(500)
                     .body(Map.of("message", "Upload failed"));
         }

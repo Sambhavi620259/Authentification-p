@@ -22,7 +22,6 @@ public class DashboardServiceImpl implements DashboardService {
     private final TransactionRepository transactionRepository;
     private final ApplicationRepository applicationRepository;
     private final SubscriptionRepository subscriptionRepository;
-    private final WalletRepository walletRepository;
     private final ReferralRepository referralRepository;
     private final KycRepository kycRepository;
     private final NotificationRepository notificationRepository;
@@ -45,7 +44,6 @@ public class DashboardServiceImpl implements DashboardService {
 
         try {
 
-            // ✅ SAFE pageable
             Pageable pageable = PageRequest.of(0, 50);
 
             Page<TransactionEntity> txPage =
@@ -69,13 +67,14 @@ public class DashboardServiceImpl implements DashboardService {
             // ================= COUNTS =================
 
             long totalApps = applicationRepository.countByUser_Id(userId);
+
             long activeSubs = subscriptionRepository
                     .countByUser_IdAndStatusIgnoreCase(userId, "ACTIVE");
+
             long referrals = referralRepository.countByReferrer_Id(userId);
 
-            Double walletBalance = walletRepository.findByUser_Id(userId)
-                    .map(WalletEntity::getBalance)
-                    .orElse(0.0);
+            // ❌ Wallet removed → replaced with 0
+            Double walletBalance = 0.0;
 
             String kycStatus = kycRepository.findByUser_Id(userId)
                     .map(KycEntity::getStatus)
@@ -87,7 +86,7 @@ public class DashboardServiceImpl implements DashboardService {
             return DashboardSummaryResponse.builder()
                     .totalApps((int) totalApps)
                     .activeSubscriptions((int) activeSubs)
-                    .walletBalance(walletBalance)
+                    .walletBalance(walletBalance) // keep for frontend compatibility
                     .totalTransactions(transactions.size())
                     .referralCount((int) referrals)
                     .kycStatus(kycStatus)
@@ -96,9 +95,6 @@ public class DashboardServiceImpl implements DashboardService {
                     .build();
 
         } catch (Exception e) {
-
-            // 🔥 CRITICAL DEBUG (DO NOT REMOVE)
-            e.printStackTrace();
 
             log.error("❌ Dashboard error: ", e);
 
@@ -116,11 +112,10 @@ public class DashboardServiceImpl implements DashboardService {
 
         UserEntity user = getUser(email);
 
-        // ✅ Pagination + Limit + Sorting (POINT 3 FIXED)
         Pageable pageable = PageRequest.of(
                 page,
-                Math.min(size, 50), // 🔥 MAX SIZE = 50
-                Sort.by("paymentDate").descending() // 🔥 DEFAULT SORTING
+                Math.min(size, 50),
+                Sort.by("paymentDate").descending()
         );
 
         return transactionRepository
@@ -179,7 +174,7 @@ public class DashboardServiceImpl implements DashboardService {
 
     private UserEntity getUser(String email) {
 
-        return userRepository.findByEmail(email)
+        return userRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() ->
                         new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
     }

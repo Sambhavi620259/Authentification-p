@@ -12,13 +12,11 @@ import in.bawvpl.Authify.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import org.springframework.data.domain.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-
-import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -36,14 +34,11 @@ public class CartServiceImpl implements CartItemService {
 
         email = email.toLowerCase().trim();
 
-        UserEntity user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "User not found"));
+        UserEntity user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
         Cart cart = cartRepository.findByUser(user)
-                .orElseGet(() -> cartRepository.save(
-                        Cart.builder().user(user).build()
-                ));
+                .orElseGet(() -> cartRepository.save(Cart.builder().user(user).build()));
 
         if (req.getProductId() == null || req.getProductId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product ID required");
@@ -80,22 +75,21 @@ public class CartServiceImpl implements CartItemService {
 
     // ================= GET ITEMS =================
     @Override
-    public List<CartItemResponse> getItemsForUser(String email) {
+    public Page<CartItemResponse> getItemsForUser(String email, int page, int size) {
 
         email = email.toLowerCase().trim();
 
-        UserEntity user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "User not found"));
+        UserEntity user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
         Cart cart = cartRepository.findByUser(user)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Cart not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cart not found"));
 
-        return cartItemRepository.findByCart(cart)
-                .stream()
-                .map(this::toResponse)
-                .collect(Collectors.toList());
+        Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
+
+        Page<CartItem> cartItems = cartItemRepository.findByCart(cart, pageable);
+
+        return cartItems.map(this::toResponse);
     }
 
     // ================= REMOVE ITEM =================
@@ -105,28 +99,24 @@ public class CartServiceImpl implements CartItemService {
 
         email = email.toLowerCase().trim();
 
-        UserEntity user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "User not found"));
+        UserEntity user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
         Cart cart = cartRepository.findByUser(user)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Cart not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cart not found"));
 
         CartItem item = cartItemRepository
                 .findByCartAndProductId(cart, productId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Item not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Item not found"));
 
         cartItemRepository.delete(item);
     }
 
     // ================= MAPPER =================
     private CartItemResponse toResponse(CartItem item) {
-
         return CartItemResponse.builder()
                 .id(item.getId())
-                .userId(item.getCart().getUser().getEmail()) // 🔥 FIX
+                .userId(item.getCart().getUser().getEmail())
                 .productId(item.getProductId())
                 .productName(item.getProductName())
                 .price(item.getPrice())

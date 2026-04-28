@@ -2,11 +2,15 @@ package in.bawvpl.Authify.repository;
 
 import in.bawvpl.Authify.entity.ApplicationEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
-@Repository
+import java.util.List;
+
 public interface ApplicationRepository extends JpaRepository<ApplicationEntity, Long> {
 
-    // ✅ Auto-generated query (clean & safe)
     long countByUser_Id(Long userId);
+
+    List<ApplicationEntity> findByUser_Id(Long userId);
+
+    // 🔥 FIXED SEARCH METHOD
+    List<ApplicationEntity> findByAppNameContainingIgnoreCase(String appName);
 }

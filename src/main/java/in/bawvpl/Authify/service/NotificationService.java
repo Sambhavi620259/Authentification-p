@@ -6,9 +6,9 @@ import in.bawvpl.Authify.repository.NotificationRepository;
 import in.bawvpl.Authify.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
-import java.util.List;
+import org.springframework.data.domain.*;
+import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
@@ -17,13 +17,18 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
 
-    // ================= GET USER NOTIFICATIONS =================
-    public List<NotificationEntity> getNotifications(Long userId) {
+    // ================= GET USER NOTIFICATIONS (PAGINATION + SECURE) =================
+    public Page<NotificationEntity> getNotifications(String email, int page, int size) {
 
-        UserEntity user = userRepository.findById(userId)
+        UserEntity user = userRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        return notificationRepository.findByUserOrderByCreatedAtDesc(user);
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+
+        return notificationRepository.findByUser_IdOrderByCreatedAtDesc(
+                user.getId(),
+                pageable
+        );
     }
 
     // ================= MARK AS READ =================
@@ -46,15 +51,15 @@ public class NotificationService {
                 .user(user)
                 .title(title)
                 .message(message)
-                .build(); // read & createdAt auto
+                .build();
 
         notificationRepository.save(n);
     }
 
-    // ================= UNREAD COUNT =================
-    public long getUnreadCount(Long userId) {
+    // ================= UNREAD COUNT (SECURE) =================
+    public long getUnreadCountByEmail(String email) {
 
-        UserEntity user = userRepository.findById(userId)
+        UserEntity user = userRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         return notificationRepository.countByUserAndReadFalse(user);

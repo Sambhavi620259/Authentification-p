@@ -40,10 +40,12 @@ public class JwtRequestFilter extends OncePerRequestFilter {
             return true;
         }
 
+        // ✅ Public endpoints
         return path.startsWith("/api/v1.0/login")
                 || path.startsWith("/api/v1.0/register")
                 || path.startsWith("/api/v1.0/login/verify-otp")
                 || path.startsWith("/api/v1.0/verify")
+                || path.startsWith("/api/v1.0/payment/verify") // 🔥 IMPORTANT
                 || path.startsWith("/uploads/")
                 || path.startsWith("/swagger-ui/")
                 || path.startsWith("/v3/api-docs/")
@@ -63,7 +65,7 @@ public class JwtRequestFilter extends OncePerRequestFilter {
 
             final String authHeader = request.getHeader("Authorization");
 
-            // ✅ Skip if no token
+            // ✅ No token → continue
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {
                 filterChain.doFilter(request, response);
                 return;
@@ -81,46 +83,45 @@ public class JwtRequestFilter extends OncePerRequestFilter {
             try {
                 username = jwtUtil.extractUsername(jwt);
             } catch (Exception e) {
-                log.warn("Invalid JWT token: {}", e.getMessage());
+                log.warn("❌ Invalid JWT: {}", e.getMessage());
                 filterChain.doFilter(request, response);
                 return;
             }
 
-            // ================= AUTH =================
+            // ✅ Authenticate only if not already authenticated
             if (username != null &&
                     SecurityContextHolder.getContext().getAuthentication() == null) {
 
                 UserDetails userDetails =
                         userDetailsService.loadUserByUsername(username);
 
-                // ✅ validate token with username
                 if (jwtUtil.validateToken(jwt, userDetails.getUsername())) {
 
-                    UsernamePasswordAuthenticationToken auth =
+                    UsernamePasswordAuthenticationToken authentication =
                             new UsernamePasswordAuthenticationToken(
                                     userDetails,
                                     null,
                                     userDetails.getAuthorities()
                             );
 
-                    auth.setDetails(
+                    authentication.setDetails(
                             new WebAuthenticationDetailsSource().buildDetails(request)
                     );
 
-                    SecurityContextHolder.getContext().setAuthentication(auth);
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
 
-                    log.debug("Authenticated user: {}", username);
+                    log.debug("✅ Authenticated user: {}", username);
 
                 } else {
-                    log.warn("JWT validation failed for user: {}", username);
+                    log.warn("❌ JWT validation failed for user: {}", username);
                 }
             }
 
         } catch (Exception ex) {
-            log.error("JWT filter error: {}", ex.getMessage(), ex);
+            log.error("❌ JWT filter error: {}", ex.getMessage(), ex);
         }
 
-        // ✅ always continue filter chain
+        // ✅ Continue filter chain ALWAYS
         filterChain.doFilter(request, response);
     }
 }

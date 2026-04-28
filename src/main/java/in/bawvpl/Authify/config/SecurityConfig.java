@@ -34,13 +34,18 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
         http
+                // ================= CORS =================
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+
+                // ================= CSRF =================
                 .csrf(csrf -> csrf.disable())
 
+                // ================= SESSION =================
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
 
+                // ================= EXCEPTION =================
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((req, res, e) -> {
                             res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
@@ -54,12 +59,13 @@ public class SecurityConfig {
                         })
                 )
 
+                // ================= AUTHORIZATION =================
                 .authorizeHttpRequests(auth -> auth
 
                         // ✅ Preflight
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        // ✅ Public APIs
+                        // ================= PUBLIC =================
                         .requestMatchers(
                                 "/",
                                 "/error",
@@ -72,12 +78,10 @@ public class SecurityConfig {
                                 "/v3/api-docs/**"
                         ).permitAll()
 
-                        // ✅ PAYMENT VERIFY (IMPORTANT)
-                        .requestMatchers(
-                                "/api/v1.0/payment/verify"
-                        ).permitAll()
+                        // ================= WEBHOOK / PUBLIC CALLBACK =================
+                        .requestMatchers("/api/v1.0/payment/verify").permitAll()
 
-                        // ✅ ADMIN
+                        // ================= ADMIN =================
                         .requestMatchers(
                                 "/api/v1.0/admin/**",
                                 "/api/v1.0/kyc/verify/**",
@@ -85,26 +89,29 @@ public class SecurityConfig {
                                 "/api/v1.0/kyc/all"
                         ).hasRole("ADMIN")
 
-                        // ✅ AUTHENTICATED APIs
+                        // ================= AUTH REQUIRED =================
                         .requestMatchers(
                                 "/api/v1.0/profile/**",
                                 "/api/v1.0/application/**",
                                 "/api/v1.0/cart/**",
-                                "/api/v1.0/payment/**",
                                 "/api/v1.0/dashboard/**",
                                 "/api/v1.0/kyc/**",
                                 "/api/v1.0/notifications/**",
-                                "/api/v1.0/tickets/**"
+                                "/api/v1.0/tickets/**",
+                                "/api/v1.0/favorites/**",   // ✅ ADDED (IMPORTANT)
+                                "/api/v1.0/activity/**"     // ✅ FUTURE SAFE
                         ).authenticated()
 
                         .anyRequest().authenticated()
                 )
 
+                // ================= JWT FILTER =================
                 .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
 
+    // ================= CORS CONFIG =================
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
 

@@ -7,5 +7,6 @@ import java.util.List;
 
 public interface TicketRepository extends JpaRepository<TicketEntity, Long> {
 
-    List<TicketEntity> findByUserIdOrderByCreatedAtDesc(Long userId);
+    // ✅ get tickets by user
+    List<TicketEntity> findByUser_IdOrderByCreatedAtDesc(Long userId);
 }

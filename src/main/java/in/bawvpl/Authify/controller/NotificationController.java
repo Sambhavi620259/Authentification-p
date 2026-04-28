@@ -5,10 +5,11 @@ import in.bawvpl.Authify.io.ApiResponse;
 import in.bawvpl.Authify.service.NotificationService;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1.0/notifications")
@@ -17,17 +18,22 @@ public class NotificationController {
 
     private final NotificationService notificationService;
 
-    // ================= LIST =================
-    @GetMapping("/{userId}")
-    public ResponseEntity<ApiResponse<List<NotificationEntity>>> getNotifications(
-            @PathVariable Long userId
+    // ================= LIST (PAGINATION) =================
+    @GetMapping("/my")
+    public ResponseEntity<ApiResponse<?>> getNotifications(
+            Authentication auth,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
     ) {
 
+        Page<NotificationEntity> data =
+                notificationService.getNotifications(auth.getName(), page, size);
+
         return ResponseEntity.ok(
-                ApiResponse.<List<NotificationEntity>>builder()
+                ApiResponse.builder()
                         .status(200)
                         .message("Notifications fetched")
-                        .data(notificationService.getNotifications(userId))
+                        .data(data.getContent())
                         .build()
         );
     }
@@ -47,34 +53,17 @@ public class NotificationController {
         );
     }
 
-    // ================= CREATE (OPTIONAL ADMIN/API USE) =================
-    @PostMapping
-    public ResponseEntity<ApiResponse<Object>> create(
-            @RequestParam Long userId,
-            @RequestParam String title,
-            @RequestParam String message
-    ) {
-
-        notificationService.create(userId, title, message);
-
-        return ResponseEntity.ok(
-                ApiResponse.builder()
-                        .status(200)
-                        .message("Notification created")
-                        .data(null)
-                        .build()
-        );
-    }
-
     // ================= UNREAD COUNT =================
-    @GetMapping("/{userId}/unread-count")
-    public ResponseEntity<ApiResponse<Long>> unreadCount(@PathVariable Long userId) {
+    @GetMapping("/unread-count")
+    public ResponseEntity<ApiResponse<Long>> unreadCount(Authentication auth) {
+
+        long count = notificationService.getUnreadCountByEmail(auth.getName());
 
         return ResponseEntity.ok(
                 ApiResponse.<Long>builder()
                         .status(200)
                         .message("Unread count fetched")
-                        .data(notificationService.getUnreadCount(userId))
+                        .data(count)
                         .build()
         );
     }
