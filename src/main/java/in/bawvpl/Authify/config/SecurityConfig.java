@@ -62,7 +62,7 @@ public class SecurityConfig {
                 // ================= AUTHORIZATION =================
                 .authorizeHttpRequests(auth -> auth
 
-                        // ✅ Preflight
+                        // ✅ Preflight (CORS fix)
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
                         // ================= PUBLIC =================
@@ -74,9 +74,8 @@ public class SecurityConfig {
                                 "/api/v1.0/login",
                                 "/api/v1.0/login/verify-otp",
                                 "/api/v1.0/verify",
-
-                                "/api/v1.0/forgot-password",   // ✅ FIXED
-                                "/api/v1.0/reset-password",    // ✅ FIXED
+                                "/api/v1.0/forgot-password",
+                                "/api/v1.0/reset-password",
 
                                 "/uploads/**",
                                 "/swagger-ui/**",
@@ -94,10 +93,21 @@ public class SecurityConfig {
                                 "/api/v1.0/kyc/all"
                         ).hasRole("ADMIN")
 
-                        // ================= ALL SECURED =================
-                        .requestMatchers("/api/v1.0/**").authenticated()   // 🔥 REQUIRED
+                        // ================= USER FEATURES =================
+                        .requestMatchers(
+                                "/api/v1.0/profile/**",
+                                "/api/v1.0/settings/**",
+                                "/api/v1.0/activity/**",
+                                "/api/v1.0/favorites/**",
+                                "/api/v1.0/notifications/**",
+                                "/api/v1.0/tickets/**",
+                                "/api/v1.0/application/**",
+                                "/api/v1.0/kyc/**"
+                        ).authenticated()
 
-                        // fallback
+                        // ================= GLOBAL FALLBACK =================
+                        .requestMatchers("/api/v1.0/**").authenticated()
+
                         .anyRequest().authenticated()
                 )
 
