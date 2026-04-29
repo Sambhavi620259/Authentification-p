@@ -69,16 +69,21 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/",
                                 "/error",
+
                                 "/api/v1.0/register",
                                 "/api/v1.0/login",
                                 "/api/v1.0/login/verify-otp",
                                 "/api/v1.0/verify",
+
+                                "/api/v1.0/forgot-password",   // ✅ FIXED
+                                "/api/v1.0/reset-password",    // ✅ FIXED
+
                                 "/uploads/**",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**"
                         ).permitAll()
 
-                        // ================= WEBHOOK / PUBLIC CALLBACK =================
+                        // ================= WEBHOOK =================
                         .requestMatchers("/api/v1.0/payment/verify").permitAll()
 
                         // ================= ADMIN =================
@@ -89,19 +94,10 @@ public class SecurityConfig {
                                 "/api/v1.0/kyc/all"
                         ).hasRole("ADMIN")
 
-                        // ================= AUTH REQUIRED =================
-                        .requestMatchers(
-                                "/api/v1.0/profile/**",
-                                "/api/v1.0/application/**",
-                                "/api/v1.0/cart/**",
-                                "/api/v1.0/dashboard/**",
-                                "/api/v1.0/kyc/**",
-                                "/api/v1.0/notifications/**",
-                                "/api/v1.0/tickets/**",
-                                "/api/v1.0/favorites/**",   // ✅ ADDED (IMPORTANT)
-                                "/api/v1.0/activity/**"     // ✅ FUTURE SAFE
-                        ).authenticated()
+                        // ================= ALL SECURED =================
+                        .requestMatchers("/api/v1.0/**").authenticated()   // 🔥 REQUIRED
 
+                        // fallback
                         .anyRequest().authenticated()
                 )
 
@@ -111,7 +107,7 @@ public class SecurityConfig {
         return http.build();
     }
 
-    // ================= CORS CONFIG =================
+    // ================= CORS =================
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
 

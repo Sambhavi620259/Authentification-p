@@ -7,6 +7,7 @@ import in.bawvpl.Authify.repository.UserRepository;
 import in.bawvpl.Authify.io.*;
 import in.bawvpl.Authify.service.AppUserDetailsService;
 import in.bawvpl.Authify.service.RegisterService;
+import in.bawvpl.Authify.service.EmailService;
 
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.nio.file.*;
 import java.time.Instant;
@@ -32,6 +34,8 @@ public class AuthController {
     private final RegisterService registerService;
     private final KycRepository kycRepository;
     private final UserRepository userRepository;
+    private final EmailService emailService;
+    private final PasswordEncoder passwordEncoder;
 
     // ================= REGISTER =================
     @PostMapping(value = "/register", consumes = "multipart/form-data")
@@ -165,10 +169,6 @@ public class AuthController {
 
         try {
 
-            if (request.getEmail() == null || request.getPassword() == null) {
-                throw new RuntimeException("Email and password required");
-            }
-
             String email = request.getEmail().toLowerCase().trim();
 
             UserEntity user = userRepository.findByEmail(email)
@@ -208,25 +208,12 @@ public class AuthController {
 
         try {
 
-            if (request.getEmail() == null || request.getOtp() == null) {
-                throw new RuntimeException("Email and OTP required");
-            }
-
             String email = request.getEmail().toLowerCase().trim();
 
-            // ✅ FIX: get user first
             UserEntity user = userRepository.findByEmail(email)
                     .orElseThrow(() -> new RuntimeException("User not found"));
 
-            // ✅ FIX: pass user instead of email
-            AuthResponse response = appUserDetailsService.verifyLoginOtp(
-                    user,
-                    request.getOtp()
-            );
-
-            if (response == null || response.getToken() == null) {
-                throw new RuntimeException("Token not generated");
-            }
+            AuthResponse response = appUserDetailsService.verifyLoginOtp(user, request.getOtp());
 
             return ResponseEntity.ok(
                     ApiResponse.<AuthResponse>builder()
@@ -250,6 +237,87 @@ public class AuthController {
         }
     }
 
+    // ================= FORGOT PASSWORD =================
+    @PostMapping("/forgot-password")
+    public ResponseEntity<ApiResponse<String>> forgotPassword(@RequestBody ForgotPasswordReq req) {
+
+        try {
+            String email = req.getEmail().toLowerCase().trim();
+
+            UserEntity user = userRepository.findByEmail(email)
+                    .orElseThrow(() -> new RuntimeException("User not found"));
+
+            String otp = String.valueOf((int)(Math.random() * 900000) + 100000);
+
+            user.setResetOtp(otp);
+            user.setResetOtpExpiry(Instant.now().plusSeconds(300));
+
+            userRepository.save(user);
+
+            emailService.sendResetOtpEmail(email, otp);
+
+            return ResponseEntity.ok(
+                    ApiResponse.<String>builder()
+                            .status(200)
+                            .message("OTP sent to email")
+                            .build()
+            );
+
+        } catch (Exception e) {
+            log.error("❌ Forgot password error: ", e);
+
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+                    ApiResponse.<String>builder()
+                            .status(400)
+                            .message(e.getMessage())
+                            .build()
+            );
+        }
+    }
+
+    // ================= RESET PASSWORD =================
+    @PostMapping("/reset-password")
+    public ResponseEntity<ApiResponse<String>> resetPassword(@RequestBody ResetPasswordReq req) {
+
+        try {
+            String email = req.getEmail().toLowerCase().trim();
+
+            UserEntity user = userRepository.findByEmail(email)
+                    .orElseThrow(() -> new RuntimeException("User not found"));
+
+            if (!req.getOtp().equals(user.getResetOtp())) {
+                throw new RuntimeException("Invalid OTP");
+            }
+
+            if (user.getResetOtpExpiry().isBefore(Instant.now())) {
+                throw new RuntimeException("OTP expired");
+            }
+
+            user.setPassword(passwordEncoder.encode(req.getNewPassword()));
+            user.setResetOtp(null);
+            user.setResetOtpExpiry(null);
+
+            userRepository.save(user);
+
+            return ResponseEntity.ok(
+                    ApiResponse.<String>builder()
+                            .status(200)
+                            .message("Password reset successful")
+                            .build()
+            );
+
+        } catch (Exception e) {
+            log.error("❌ Reset password error: ", e);
+
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+                    ApiResponse.<String>builder()
+                            .status(400)
+                            .message(e.getMessage())
+                            .build()
+            );
+        }
+    }
+
     // ================= DTO =================
     @Data
     static class LoginRequest {
@@ -261,5 +329,17 @@ public class AuthController {
     static class VerifyOtpRequest {
         private String email;
         private String otp;
+    }
+
+    @Data
+    static class ForgotPasswordReq {
+        private String email;
+    }
+
+    @Data
+    static class ResetPasswordReq {
+        private String email;
+        private String otp;
+        private String newPassword;
     }
 }

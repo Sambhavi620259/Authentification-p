@@ -3,6 +3,7 @@ package in.bawvpl.Authify.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -146,6 +147,12 @@ public class UserEntity {
             this.email = this.email.toLowerCase().trim();
         }
     }
+
+    @Column(name = "reset_otp")
+    private String resetOtp;
+
+    @Column(name = "reset_otp_expiry")
+    private Instant resetOtpExpiry;
 
     // ================= HELPERS =================
 

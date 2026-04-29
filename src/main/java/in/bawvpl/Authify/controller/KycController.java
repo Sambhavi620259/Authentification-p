@@ -63,7 +63,6 @@ public class KycController {
         }
 
         try {
-            // create directory
             Path uploadPath = Paths.get(UPLOAD_DIR);
             if (!Files.exists(uploadPath)) {
                 Files.createDirectories(uploadPath);
@@ -94,6 +93,57 @@ public class KycController {
         }
     }
 
+    // ================= RESUBMIT (🔥 ADDED) =================
+    @PostMapping("/resubmit")
+    public ResponseEntity<ApiResponse<String>> resubmit(
+            Authentication auth,
+            @RequestParam String documentType,
+            @RequestParam String documentNumber,
+            @RequestParam MultipartFile file
+    ) {
+
+        String email = getEmail(auth);
+
+        UserEntity user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        KycEntity existing = kycRepository.findByUser(user)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "KYC not found"));
+
+        // ❌ Only allow if rejected
+        if (!existing.isRejected()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only rejected KYC can be resubmitted");
+        }
+
+        try {
+            Path uploadPath = Paths.get(UPLOAD_DIR);
+            if (!Files.exists(uploadPath)) {
+                Files.createDirectories(uploadPath);
+            }
+
+            String fileName = System.currentTimeMillis() + "_" + file.getOriginalFilename();
+            Path filePath = uploadPath.resolve(fileName);
+
+            Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
+
+            // ✅ update existing
+            existing.setDocumentType(documentType);
+            existing.setDocumentNumber(documentNumber);
+            existing.setFilePath(fileName);
+            existing.setStatus(PENDING);
+            existing.setCompleted(false);
+            existing.setUploadedAt(Instant.now());
+
+            kycRepository.save(existing);
+
+            return ok("KYC resubmitted", "SUCCESS");
+
+        } catch (Exception e) {
+            log.error("KYC resubmit failed", e);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Resubmit failed");
+        }
+    }
+
     // ================= GET MY KYC =================
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<KycEntity>> getMyKyc(Authentication auth) {
@@ -110,7 +160,6 @@ public class KycController {
     }
 
     // ================= ADMIN =================
-
     @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/all")
     public ResponseEntity<ApiResponse<List<KycEntity>>> getAllKyc() {
@@ -158,7 +207,6 @@ public class KycController {
     }
 
     // ================= HELPERS =================
-
     private UserEntity getUser(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));

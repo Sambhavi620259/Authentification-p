@@ -1,12 +1,18 @@
 package in.bawvpl.Authify.controller;
 
+import in.bawvpl.Authify.io.ApiResponse;
+import in.bawvpl.Authify.io.TicketMessageResponse;
+import in.bawvpl.Authify.io.TicketResponse;
 import in.bawvpl.Authify.service.TicketService;
+
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1.0/tickets")
@@ -21,75 +27,88 @@ public class TicketController {
         if (auth == null || auth.getName() == null) {
             throw new RuntimeException("Unauthorized");
         }
-        return auth.getName();
+        return auth.getName().toLowerCase().trim();
     }
 
     // ================= CREATE =================
-    @PostMapping
-    public ResponseEntity<?> create(Authentication auth,
-                                    @RequestBody CreateReq req) {
+    @PostMapping("/create")
+    public ResponseEntity<ApiResponse<TicketResponse>> create(
+            Authentication auth,
+            @RequestBody CreateReq req
+    ) {
+
+        TicketResponse res = ticketService.create(
+                getEmail(auth),
+                req.getSubject(),
+                req.getMessage()
+        );
 
         return ResponseEntity.ok(
-                ticketService.create(
-                        getEmail(auth),
-                        req.getSubject(),
-                        req.getMessage()
-                )
+                ApiResponse.<TicketResponse>builder()
+                        .status(200)
+                        .message("Ticket created")
+                        .data(res)
+                        .build()
         );
     }
 
     // ================= MY TICKETS =================
     @GetMapping("/my")
-    public ResponseEntity<?> myTickets(Authentication auth) {
+    public ResponseEntity<ApiResponse<List<TicketResponse>>> myTickets(
+            Authentication auth
+    ) {
+
+        List<TicketResponse> list =
+                ticketService.getUserTickets(getEmail(auth));
 
         return ResponseEntity.ok(
-                ticketService.getUserTickets(getEmail(auth))
+                ApiResponse.<List<TicketResponse>>builder()
+                        .status(200)
+                        .message("Tickets fetched")
+                        .data(list)
+                        .build()
         );
     }
 
     // ================= DETAIL =================
     @GetMapping("/{ticketId}")
-    public ResponseEntity<?> detail(Authentication auth,
-                                    @PathVariable Long ticketId) {
+    public ResponseEntity<ApiResponse<List<TicketMessageResponse>>> detail(
+            Authentication auth,
+            @PathVariable Long ticketId
+    ) {
+
+        List<TicketMessageResponse> messages =
+                ticketService.getMessages(ticketId, getEmail(auth));
 
         return ResponseEntity.ok(
-                ticketService.getMessages(ticketId, getEmail(auth))
+                ApiResponse.<List<TicketMessageResponse>>builder()
+                        .status(200)
+                        .message("Ticket messages fetched")
+                        .data(messages)
+                        .build()
         );
     }
 
     // ================= USER REPLY =================
-    @PostMapping("/{ticketId}/reply")
-    public ResponseEntity<?> reply(Authentication auth,
-                                   @PathVariable Long ticketId,
-                                   @RequestBody ReplyReq req) {
+    @PostMapping("/reply")
+    public ResponseEntity<ApiResponse<String>> reply(
+            Authentication auth,
+            @RequestBody ReplyReq req
+    ) {
 
         ticketService.replyUser(
-                ticketId,
+                req.getTicketId(),
                 req.getMessage(),
                 getEmail(auth)
         );
 
-        return ResponseEntity.ok("Reply sent");
-    }
-
-    // ================= CLOSE =================
-    @PutMapping("/{ticketId}/close")
-    public ResponseEntity<?> close(Authentication auth,
-                                   @PathVariable Long ticketId) {
-
-        ticketService.close(ticketId, getEmail(auth));
-
-        return ResponseEntity.ok("Closed");
-    }
-
-    // ================= ADMIN REPLY =================
-    @PostMapping("/admin/{ticketId}/reply")
-    public ResponseEntity<?> adminReply(@PathVariable Long ticketId,
-                                        @RequestBody ReplyReq req) {
-
-        ticketService.replyAdmin(ticketId, req.getMessage());
-
-        return ResponseEntity.ok("Admin replied");
+        return ResponseEntity.ok(
+                ApiResponse.<String>builder()
+                        .status(200)
+                        .message("Reply sent")
+                        .data(null)
+                        .build()
+        );
     }
 
     // ================= DTOs =================
@@ -101,6 +120,7 @@ public class TicketController {
 
     @Data
     public static class ReplyReq {
+        private Long ticketId;
         private String message;
     }
 }

@@ -53,7 +53,9 @@ public class FavoriteService {
         ApplicationEntity app = getApp(appId);
 
         if (favoriteRepository.existsByUser_IdAndApp_AppId(user.getId(), appId)) {
+
             favoriteRepository.deleteByUser_IdAndApp_AppId(user.getId(), appId);
+
             log.info("Removed from favorites: user={}, appId={}", user.getEmail(), appId);
             return "Removed from favorites";
         }
@@ -86,14 +88,16 @@ public class FavoriteService {
                 .collect(Collectors.toList());
     }
 
-    // ================= REMOVE =================
+    // ================= REMOVE (SAFE) =================
     @Transactional
     public void remove(String email, Long appId) {
 
         UserEntity user = getUser(email);
 
+        // ✅ SAFE DELETE (NO ERROR)
         if (!favoriteRepository.existsByUser_IdAndApp_AppId(user.getId(), appId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Favorite not found");
+            log.warn("Favorite not found: user={}, appId={}", user.getEmail(), appId);
+            return;
         }
 
         favoriteRepository.deleteByUser_IdAndApp_AppId(user.getId(), appId);
