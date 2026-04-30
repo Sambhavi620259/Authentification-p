@@ -12,9 +12,7 @@ import jakarta.annotation.PostConstruct;
 
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Function;
 
 @Component
@@ -25,7 +23,10 @@ public class JwtUtil {
     private String secret;
 
     @Value("${auth.jwt.expiration}")
-    private long expiration;
+    private long accessTokenExpiry;
+
+    @Value("${auth.jwt.refresh-expiration:604800000}") // 7 days default
+    private long refreshTokenExpiry;
 
     private Key signingKey;
 
@@ -40,22 +41,35 @@ public class JwtUtil {
         this.signingKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 
-    // ================= GENERATE TOKEN =================
+    // ================= ACCESS TOKEN =================
     public String generateAccessToken(String username, Integer tokenVersion) {
 
         Map<String, Object> claims = new HashMap<>();
         claims.put("tokenVersion", tokenVersion == null ? 0 : tokenVersion);
 
+        return buildToken(username, claims, accessTokenExpiry);
+    }
+
+    // ================= REFRESH TOKEN =================
+    public String generateRefreshToken(String username) {
+
+        return buildToken(username, new HashMap<>(), refreshTokenExpiry);
+    }
+
+    // ================= COMMON BUILDER =================
+    private String buildToken(String username, Map<String, Object> claims, long expiry) {
+
         return Jwts.builder()
                 .setClaims(claims)
                 .setSubject(username)
+                .setIssuer("Authify")                  // 🔥 good practice
                 .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + expiration))
+                .setExpiration(new Date(System.currentTimeMillis() + expiry))
                 .signWith(signingKey, SignatureAlgorithm.HS256)
                 .compact();
     }
 
-    // ✅ Backward compatibility
+    // ================= BACKWARD SUPPORT =================
     public String generateToken(String username) {
         return generateAccessToken(username, 0);
     }
@@ -65,7 +79,7 @@ public class JwtUtil {
         return extractClaim(token, Claims::getSubject);
     }
 
-    // ================= EXTRACT TOKEN VERSION =================
+    // ================= TOKEN VERSION =================
     public Integer extractTokenVersion(String token) {
 
         try {
@@ -85,14 +99,15 @@ public class JwtUtil {
 
             String clean = cleanToken(token);
 
-            final String extractedUsername = extractUsername(clean);
+            Claims claims = extractAllClaims(clean);
 
-            return extractedUsername.equals(username) && !isTokenExpired(clean);
+            return claims.getSubject().equals(username)
+                    && !isTokenExpired(claims);
 
         } catch (ExpiredJwtException e) {
-            log.warn("JWT expired: {}", e.getMessage());
+            log.warn("❌ JWT expired");
         } catch (JwtException | IllegalArgumentException e) {
-            log.error("JWT invalid: {}", e.getMessage());
+            log.error("❌ JWT invalid: {}", e.getMessage());
         }
 
         return false;
@@ -100,15 +115,16 @@ public class JwtUtil {
 
     // ================= EXTRACT CLAIM =================
     public <T> T extractClaim(String token, Function<Claims, T> resolver) {
-
-        final Claims claims = extractAllClaims(token);
-        return resolver.apply(claims);
+        return resolver.apply(extractAllClaims(token));
     }
 
     // ================= CHECK EXPIRY =================
-    public boolean isTokenExpired(String token) {
+    private boolean isTokenExpired(Claims claims) {
+        return claims.getExpiration().before(new Date());
+    }
 
-        return extractClaim(token, Claims::getExpiration).before(new Date());
+    public boolean isTokenExpired(String token) {
+        return isTokenExpired(extractAllClaims(token));
     }
 
     // ================= CLEAN TOKEN =================
@@ -120,7 +136,7 @@ public class JwtUtil {
         return token;
     }
 
-    // ================= EXTRACT CLAIMS =================
+    // ================= PARSE CLAIMS =================
     private Claims extractAllClaims(String token) {
 
         return Jwts.parserBuilder()

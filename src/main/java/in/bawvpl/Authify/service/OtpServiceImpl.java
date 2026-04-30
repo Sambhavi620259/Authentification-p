@@ -21,6 +21,8 @@ import java.util.concurrent.ThreadLocalRandom;
 public class OtpServiceImpl implements OtpService {
 
     private final OtpRepository otpRepository;
+    private final EmailService emailService;   // 🔥 ADD
+    private final SmsService smsService;       // 🔥 ADD
 
     private static final int EXPIRY_MINUTES = 5;
     private static final int MAX_ATTEMPTS = 5;
@@ -84,6 +86,7 @@ public class OtpServiceImpl implements OtpService {
     private String generate(UserEntity user, String purpose) {
 
         String email = normalize(user.getEmail());
+        String phone = user.getPhoneNumber();
 
         OtpVerification last = otpRepository
                 .findTopByEmailAndPurposeOrderByCreatedAtDesc(email, purpose)
@@ -102,7 +105,7 @@ public class OtpServiceImpl implements OtpService {
         OtpVerification entity = new OtpVerification();
         entity.setUserId(user.getId());
         entity.setEmail(email);
-        entity.setPhoneNumber(user.getPhoneNumber());
+        entity.setPhoneNumber(phone);
         entity.setOtp(otp);
         entity.setPurpose(purpose);
         entity.setExpiryTime(LocalDateTime.now().plusMinutes(EXPIRY_MINUTES));
@@ -112,7 +115,22 @@ public class OtpServiceImpl implements OtpService {
 
         otpRepository.save(entity);
 
-        log.info("{} OTP generated for {}", purpose, email);
+        // 🔥🔥🔥 SEND SAME OTP TO BOTH
+        try {
+            if (email != null) {
+                emailService.sendVerificationOtpEmail(email, otp);
+            }
+
+            if (phone != null) {
+                smsService.sendVerificationOtp(phone, otp);
+            }
+
+        } catch (Exception e) {
+            log.error("❌ OTP sending failed", e);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "OTP delivery failed");
+        }
+
+        log.info("✅ {} OTP sent to EMAIL + PHONE for {}", purpose, email);
 
         return otp;
     }
@@ -155,7 +173,7 @@ public class OtpServiceImpl implements OtpService {
         entity.setIsUsed(true);
         otpRepository.save(entity);
 
-        log.info("{} OTP verified for {}", purpose, email);
+        log.info("✅ {} OTP verified for {}", purpose, email);
     }
 
     // ================= HELPERS =================
