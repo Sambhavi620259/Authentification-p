@@ -28,35 +28,35 @@ public class UserEntity {
     private Long id;
 
     // ================= UNIQUE USER ID =================
-    @Column(name = "user_id", unique = true, nullable = false, updatable = false)
+    @Column(name = "user_id", unique = true, nullable = false, updatable = false, length = 20)
     private String userId;
 
     // ================= BASIC DETAILS =================
-    @Column(name = "entity_type")
+    @Column(name = "entity_type", length = 50)
     private String entityType;
 
-    @Column(name = "entity_name")
+    @Column(name = "entity_name", length = 150)
     private String entityName;
 
-    @Column(name = "contact_person")
+    @Column(name = "contact_person", length = 100)
     private String contactPerson;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false, unique = true, length = 150)
     private String email;
 
-    @Column(name = "phone_number")
+    @Column(name = "phone_number", length = 15)
     private String phoneNumber;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 255)
     private String password;
 
     // ================= ROLE =================
-    @Column(name = "admin_role", nullable = false)
+    @Column(name = "admin_role", nullable = false, length = 50)
     private String role;
 
     // ================= USER STATUS =================
     @Builder.Default
-    @Column(name = "user_status", nullable = false)
+    @Column(name = "user_status", nullable = false, length = 20)
     private String userStatus = "ACTIVE";
 
     // ================= EMAIL VERIFICATION =================
@@ -64,15 +64,15 @@ public class UserEntity {
     @Column(name = "email_verified", nullable = false)
     private Boolean emailVerified = false;
 
-    @Column(name = "verification_token")
+    @Column(name = "verification_token", length = 255)
     private String verificationToken;
 
     // ================= EMAIL CHANGE FLOW =================
-    @Column(name = "pending_email")
+    @Column(name = "pending_email", length = 150)
     private String pendingEmail;
 
-    @Column(name = "email_change_token")
-    private String emailChangeToken;
+    @Column(name = "email_change_otp", length = 10)
+    private String emailChangeOtp;
 
     @Column(name = "email_change_expiry")
     private LocalDateTime emailChangeExpiry;
@@ -94,17 +94,18 @@ public class UserEntity {
     private Boolean isKycVerified = false;
 
     // ================= ADDRESS =================
+    @Column(length = 300)
     private String address;
 
     // ================= REFERRAL =================
-    @Column(name = "referral_code", unique = true, nullable = false)
+    @Column(name = "referral_code", unique = true, nullable = false, length = 20)
     private String referralCode;
 
-    @Column(name = "referred_by")
+    @Column(name = "referred_by", length = 20)
     private String referredBy;
 
     // ================= PROFILE IMAGE =================
-    @Column(name = "photo_url")
+    @Column(name = "photo_url", length = 500)
     private String photoUrl;
 
     // ================= TOKEN VERSION =================
@@ -140,24 +141,21 @@ public class UserEntity {
 
         LocalDateTime now = LocalDateTime.now();
 
+        // ✅ Generate userId
         if (this.userId == null || this.userId.isBlank()) {
             this.userId = generateUserId();
         }
 
+        // ✅ timestamps
         if (this.createdAt == null) {
             this.createdAt = now;
         }
-
         this.updatedAt = now;
 
-        if (this.email != null) {
-            this.email = this.email.toLowerCase().trim();
-        }
+        // ✅ Normalize
+        normalizeFields();
 
-        if (this.phoneNumber != null) {
-            this.phoneNumber = this.phoneNumber.trim();
-        }
-
+        // ✅ Defaults
         if (this.userStatus == null) this.userStatus = "ACTIVE";
         if (this.emailVerified == null) this.emailVerified = false;
         if (this.phoneVerified == null) this.phoneVerified = false;
@@ -165,10 +163,12 @@ public class UserEntity {
         if (this.tokenVersion == null) this.tokenVersion = 0;
         if (this.twoFactorEnabled == null) this.twoFactorEnabled = false;
 
+        // ✅ Role default
         if (this.role == null || this.role.isBlank()) {
             this.role = "ROLE_USER";
         }
 
+        // ✅ Referral Code
         if (this.referralCode == null || this.referralCode.isBlank()) {
             this.referralCode = generateReferralCode();
         }
@@ -176,8 +176,12 @@ public class UserEntity {
 
     @PreUpdate
     public void preUpdate() {
-
         this.updatedAt = LocalDateTime.now();
+        normalizeFields();
+    }
+
+    // ================= NORMALIZER =================
+    private void normalizeFields() {
 
         if (this.email != null) {
             this.email = this.email.toLowerCase().trim();
@@ -185,6 +189,10 @@ public class UserEntity {
 
         if (this.phoneNumber != null) {
             this.phoneNumber = this.phoneNumber.trim();
+        }
+
+        if (this.pendingEmail != null) {
+            this.pendingEmail = this.pendingEmail.toLowerCase().trim();
         }
     }
 

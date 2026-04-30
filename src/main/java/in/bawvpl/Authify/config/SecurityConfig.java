@@ -62,7 +62,7 @@ public class SecurityConfig {
                 // ================= AUTHORIZATION =================
                 .authorizeHttpRequests(auth -> auth
 
-                        // ✅ Preflight (CORS)
+                        // ✅ Preflight
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
                         // ================= PUBLIC =================
@@ -77,6 +77,12 @@ public class SecurityConfig {
                                 "/api/v1.0/forgot-password",
                                 "/api/v1.0/reset-password",
 
+                                // 🔥 ADD THIS (EMAIL CHANGE VERIFY)
+                                "/api/v1.0/profile/change-email/verify",
+
+                                // 🔥 ADD 2FA
+                                "/api/v1.0/2fa/**",
+
                                 "/uploads/**",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**"
@@ -86,7 +92,6 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1.0/payment/verify").permitAll()
 
                         // ================= ADMIN =================
-                        // ⚠️ Ensure DB stores ROLE_ADMIN (with prefix)
                         .requestMatchers(
                                 "/api/v1.0/admin/**",
                                 "/api/v1.0/kyc/verify/**",
@@ -94,7 +99,7 @@ public class SecurityConfig {
                                 "/api/v1.0/kyc/all"
                         ).hasRole("ADMIN")
 
-                        // ================= USER FEATURES =================
+                        // ================= USER =================
                         .requestMatchers(
                                 "/api/v1.0/profile/**",
                                 "/api/v1.0/settings/**",
@@ -103,11 +108,12 @@ public class SecurityConfig {
                                 "/api/v1.0/notifications/**",
                                 "/api/v1.0/tickets/**",
                                 "/api/v1.0/application/**",
-                                "/api/v1.0/kyc/**"
+                                "/api/v1.0/kyc/**",
+                                "/api/v1.0/dashboard/**" // 🔥 ADD DASHBOARD
                         ).authenticated()
 
-                        // ================= FALLBACK =================
-                        .requestMatchers("/api/v1.0/**").authenticated()
+                        // ================= FINAL SAFETY =================
+                        .anyRequest().authenticated()
                 )
 
                 // ================= JWT FILTER =================
@@ -132,15 +138,15 @@ public class SecurityConfig {
                 "GET", "POST", "PUT", "DELETE", "OPTIONS"
         ));
 
-        // 🔥 FIXED (avoid wildcard security issue)
         config.setAllowedHeaders(List.of(
                 "Authorization",
-                "Content-Type"
+                "Content-Type",
+                "Accept"
         ));
 
-        config.setAllowCredentials(true);
-
         config.setExposedHeaders(List.of("Authorization"));
+
+        config.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);

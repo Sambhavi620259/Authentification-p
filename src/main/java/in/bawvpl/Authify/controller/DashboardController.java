@@ -29,19 +29,21 @@ public class DashboardController {
         return auth.getName();
     }
 
-    // ================= MAIN DASHBOARD (🔥 IMPORTANT) =================
+    // ================= MAIN DASHBOARD =================
     @GetMapping
-    public ResponseEntity<?> dashboard(Authentication auth) {
+    public ResponseEntity<ApiResponse<DashboardSummaryResponse>> dashboard(Authentication auth) {
 
         String email = getEmail(auth);
 
-        log.info("📊 Dashboard for {}", email);
+        log.info("📊 Dashboard request for {}", email);
+
+        DashboardSummaryResponse data = dashboardService.getSummaryByEmail(email);
 
         return ResponseEntity.ok(
-                ApiResponse.builder()
+                ApiResponse.<DashboardSummaryResponse>builder()
                         .status(200)
                         .message("Dashboard fetched")
-                        .data(dashboardService.getSummaryByEmail(email))
+                        .data(data)
                         .build()
         );
     }
@@ -52,14 +54,11 @@ public class DashboardController {
 
         String email = getEmail(auth);
 
-        DashboardSummaryResponse response =
-                dashboardService.getSummaryByEmail(email);
-
         return ResponseEntity.ok(
                 ApiResponse.<DashboardSummaryResponse>builder()
                         .status(200)
                         .message("Dashboard summary fetched")
-                        .data(response)
+                        .data(dashboardService.getSummaryByEmail(email))
                         .build()
         );
     }
@@ -72,25 +71,25 @@ public class DashboardController {
             @RequestParam(defaultValue = "10") int size
     ) {
 
+        if (size > 50) size = 50; // 🔥 safety limit
+
         String email = getEmail(auth);
 
-        log.info("💰 Transactions for {} | page={} size={}", email, page, size);
-
-        Page<TransactionResponse> response =
+        Page<TransactionResponse> data =
                 dashboardService.getTransactionsByEmail(email, page, size);
 
         return ResponseEntity.ok(
                 ApiResponse.<Page<TransactionResponse>>builder()
                         .status(200)
                         .message("Transactions fetched")
-                        .data(response)
+                        .data(data)
                         .build()
         );
     }
 
-    // ================= ACTIVITY (🔥 OPTIONAL BUT IMPORTANT) =================
+    // ================= ACTIVITY =================
     @GetMapping("/activity")
-    public ResponseEntity<?> getActivity(
+    public ResponseEntity<ApiResponse<Object>> getActivity(
             Authentication auth,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size

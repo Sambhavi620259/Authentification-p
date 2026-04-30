@@ -23,8 +23,10 @@ public class OtpServiceImpl implements OtpService {
     private final OtpRepository otpRepository;
 
     private static final int EXPIRY_MINUTES = 5;
+    private static final int MAX_ATTEMPTS = 5;
+    private static final int COOLDOWN_SECONDS = 30;
 
-    // ================= GENERATE =================
+    // ================= GENERATE OTP =================
     @Override
     public String generateOtp() {
         return String.valueOf(ThreadLocalRandom.current().nextInt(100000, 999999));
@@ -82,6 +84,17 @@ public class OtpServiceImpl implements OtpService {
     private String generate(UserEntity user, String purpose) {
 
         String email = normalize(user.getEmail());
+
+        OtpVerification last = otpRepository
+                .findTopByEmailAndPurposeOrderByCreatedAtDesc(email, purpose)
+                .orElse(null);
+
+        // 🔥 COOLDOWN CHECK
+        if (last != null && last.getLastSentAt() != null &&
+                last.getLastSentAt().plusSeconds(COOLDOWN_SECONDS).isAfter(LocalDateTime.now())) {
+            throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "Wait before requesting OTP again");
+        }
+
         String otp = generateOtp();
 
         invalidateOldOtp(email, purpose);
@@ -94,6 +107,8 @@ public class OtpServiceImpl implements OtpService {
         entity.setPurpose(purpose);
         entity.setExpiryTime(LocalDateTime.now().plusMinutes(EXPIRY_MINUTES));
         entity.setIsUsed(false);
+        entity.setAttempts(0);
+        entity.setLastSentAt(LocalDateTime.now());
 
         otpRepository.save(entity);
 
@@ -116,15 +131,24 @@ public class OtpServiceImpl implements OtpService {
                 .orElseThrow(() ->
                         new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP not found"));
 
+        // 🔥 ATTEMPT LIMIT
+        if (entity.getAttempts() != null && entity.getAttempts() >= MAX_ATTEMPTS) {
+            throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "Too many attempts");
+        }
+
+        entity.setAttempts(entity.getAttempts() == null ? 1 : entity.getAttempts() + 1);
+
         if (Boolean.TRUE.equals(entity.getIsUsed())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP already used");
         }
 
         if (!entity.getOtp().equals(otp)) {
+            otpRepository.save(entity);
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid OTP");
         }
 
-        if (entity.getExpiryTime().isBefore(LocalDateTime.now())) {
+        if (entity.getExpiryTime() == null ||
+                entity.getExpiryTime().isBefore(LocalDateTime.now())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP expired");
         }
 

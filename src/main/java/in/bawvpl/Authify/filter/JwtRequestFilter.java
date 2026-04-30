@@ -2,21 +2,18 @@ package in.bawvpl.Authify.filter;
 
 import in.bawvpl.Authify.entity.UserEntity;
 import in.bawvpl.Authify.repository.UserRepository;
+import in.bawvpl.Authify.repository.UserSessionRepository;
 import in.bawvpl.Authify.util.JwtUtil;
 
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.*;
+import jakarta.servlet.http.*;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
-
+import org.springframework.security.core.userdetails.*;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -31,124 +28,139 @@ public class JwtRequestFilter extends OncePerRequestFilter {
     private final JwtUtil jwtUtil;
     private final UserDetailsService userDetailsService;
     private final UserRepository userRepository;
+    private final UserSessionRepository sessionRepo;
 
-    // ================= SKIP FILTER =================
+    // ================= SKIP =================
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
 
         String path = request.getRequestURI();
-        String method = request.getMethod();
 
-        // ✅ Allow CORS preflight
-        if ("OPTIONS".equalsIgnoreCase(method)) {
-            return true;
-        }
-
-        // ✅ Public endpoints
         return path.startsWith("/api/v1.0/login")
                 || path.startsWith("/api/v1.0/register")
-                || path.startsWith("/api/v1.0/login/verify-otp")
                 || path.startsWith("/api/v1.0/verify")
                 || path.startsWith("/api/v1.0/forgot-password")
                 || path.startsWith("/api/v1.0/reset-password")
-                || path.startsWith("/api/v1.0/payment/verify")
+                || path.startsWith("/api/v1.0/2fa")
                 || path.startsWith("/uploads/")
-                || path.startsWith("/swagger-ui/")
-                || path.startsWith("/v3/api-docs/")
-                || path.equals("/")
-                || path.equals("/error");
+                || path.startsWith("/swagger")
+                || path.startsWith("/v3/api-docs");
     }
 
-    // ================= MAIN FILTER =================
+    // ================= FILTER =================
     @Override
-    protected void doFilterInternal(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            FilterChain filterChain)
+    protected void doFilterInternal(HttpServletRequest request,
+                                    HttpServletResponse response,
+                                    FilterChain chain)
             throws ServletException, IOException {
 
         try {
 
-            final String authHeader = request.getHeader("Authorization");
+            String header = request.getHeader("Authorization");
 
-            // ✅ No token → continue
-            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                filterChain.doFilter(request, response);
+            if (header == null || !header.startsWith("Bearer ")) {
+                chain.doFilter(request, response);
                 return;
             }
 
-            final String jwt = authHeader.substring(7).trim();
+            String jwt = header.substring(7).trim();
 
-            if (jwt.isBlank()) {
-                filterChain.doFilter(request, response);
-                return;
-            }
-
-            String username;
-
+            String email;
             try {
-                username = jwtUtil.extractUsername(jwt);
+                email = jwtUtil.extractUsername(jwt);
             } catch (Exception e) {
-                log.warn("❌ Invalid JWT: {}", e.getMessage());
-                filterChain.doFilter(request, response);
+                log.warn("❌ Invalid JWT");
+                clearContext();
+                chain.doFilter(request, response);
                 return;
             }
 
-            // ✅ Authenticate only if not already authenticated
-            if (username != null &&
-                    SecurityContextHolder.getContext().getAuthentication() == null) {
+            if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
 
-                UserDetails userDetails =
-                        userDetailsService.loadUserByUsername(username);
-
-                // 🔥 FETCH USER FROM DB (FOR TOKEN VERSION)
-                UserEntity user = userRepository.findByEmailIgnoreCase(username)
-                        .orElse(null);
+                UserEntity user = userRepository.findByEmailIgnoreCase(email).orElse(null);
 
                 if (user == null) {
-                    log.warn("❌ User not found in DB: {}", username);
-                    filterChain.doFilter(request, response);
+                    log.warn("❌ User not found");
+                    clearContext();
+                    chain.doFilter(request, response);
                     return;
                 }
 
-                // ✅ Validate JWT
-                if (jwtUtil.validateToken(jwt, userDetails.getUsername())) {
-
-                    // 🔥 TOKEN VERSION CHECK (LOGOUT ALL SUPPORT)
-                    Integer tokenVersionInJwt = jwtUtil.extractTokenVersion(jwt);
-                    Integer currentVersion = user.getTokenVersion() == null ? 0 : user.getTokenVersion();
-
-                    if (!currentVersion.equals(tokenVersionInJwt)) {
-                        log.warn("❌ Token version mismatch (logout-all triggered)");
-                        filterChain.doFilter(request, response);
-                        return;
-                    }
-
-                    UsernamePasswordAuthenticationToken authentication =
-                            new UsernamePasswordAuthenticationToken(
-                                    userDetails,
-                                    null,
-                                    userDetails.getAuthorities()
-                            );
-
-                    authentication.setDetails(
-                            new WebAuthenticationDetailsSource().buildDetails(request)
-                    );
-
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
-
-                    log.debug("✅ Authenticated user: {}", username);
-
-                } else {
-                    log.warn("❌ JWT validation failed for user: {}", username);
+                // 🔥 USER STATUS CHECK
+                if ("DEACTIVATED".equalsIgnoreCase(user.getUserStatus())) {
+                    log.warn("❌ User deactivated");
+                    clearContext();
+                    chain.doFilter(request, response);
+                    return;
                 }
+
+                UserDetails userDetails =
+                        userDetailsService.loadUserByUsername(email);
+
+                // ================= JWT VALID =================
+                if (!jwtUtil.validateToken(jwt, email)) {
+                    log.warn("❌ JWT invalid");
+                    clearContext();
+                    chain.doFilter(request, response);
+                    return;
+                }
+
+                // ================= TOKEN VERSION =================
+                Integer tokenVersionInJwt;
+                try {
+                    tokenVersionInJwt = jwtUtil.extractTokenVersion(jwt);
+                } catch (Exception e) {
+                    log.warn("❌ Token version missing");
+                    clearContext();
+                    chain.doFilter(request, response);
+                    return;
+                }
+
+                Integer currentVersion = user.getTokenVersion() == null ? 0 : user.getTokenVersion();
+
+                if (!currentVersion.equals(tokenVersionInJwt)) {
+                    log.warn("❌ Token version mismatch");
+                    clearContext();
+                    chain.doFilter(request, response);
+                    return;
+                }
+
+                // ================= SESSION CHECK =================
+                boolean sessionActive = sessionRepo
+                        .findByTokenAndActiveTrue(jwt)
+                        .isPresent();
+
+                if (!sessionActive) {
+                    log.warn("❌ Session revoked");
+                    clearContext();
+                    chain.doFilter(request, response);
+                    return;
+                }
+
+                // ================= AUTH SET =================
+                UsernamePasswordAuthenticationToken auth =
+                        new UsernamePasswordAuthenticationToken(
+                                userDetails,
+                                null,
+                                userDetails.getAuthorities()
+                        );
+
+                auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+                SecurityContextHolder.getContext().setAuthentication(auth);
+
+                log.debug("✅ Authenticated: {}", email);
             }
 
-        } catch (Exception ex) {
-            log.error("❌ JWT filter error: {}", ex.getMessage(), ex);
+        } catch (Exception e) {
+            log.error("❌ JWT filter error", e);
+            clearContext();
         }
 
-        // ✅ Continue filter chain ALWAYS
-        filterChain.doFilter(request, response);
+        chain.doFilter(request, response);
+    }
+
+    private void clearContext() {
+        SecurityContextHolder.clearContext();
     }
 }

@@ -16,7 +16,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
@@ -33,14 +32,12 @@ public class ProfileServiceImpl implements ProfileService {
     private final OtpService otpService;
     private final SmsService smsService;
 
-    private static final String BASE_URL = "http://43.205.116.38:8080";
-
     // ================= REGISTER =================
     @Override
     @Transactional
     public ProfileResponse createProfile(ProfileRequest request) {
 
-        String email = request.getEmail().toLowerCase().trim();
+        String email = normalize(request.getEmail());
 
         if (userRepository.existsByEmail(email)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email already exists");
@@ -62,83 +59,103 @@ public class ProfileServiceImpl implements ProfileService {
         String otp = otpService.generateRegisterOtp(user);
         emailService.sendVerificationOtpEmail(user.getEmail(), otp);
 
-        return convertToProfileResponse(user);
+        return convert(user);
     }
 
-    // ================= OTP =================
+    // ================= EMAIL VERIFY =================
     @Override
-    public String verifyOtp(String email, String otp) {
-        UserEntity user = findByEmailOrThrow(email);
+    public void verifyEmailOtp(String email, String otp) {
+
+        UserEntity user = find(email);
+
         otpService.verifyRegisterOtp(user, otp);
+
         user.setEmailVerified(true);
         userRepository.save(user);
-        return "Email verified";
     }
 
     @Override
     public void sendVerificationOtp(String email) {
-        UserEntity user = findByEmailOrThrow(email);
+
+        UserEntity user = find(email);
+
         String otp = otpService.generateRegisterOtp(user);
-        emailService.sendVerificationOtpEmail(email, otp);
+        emailService.sendVerificationOtpEmail(user.getEmail(), otp);
     }
 
+    // ================= RESET =================
     @Override
     public void sendResetOtp(String email) {
-        UserEntity user = findByEmailOrThrow(email);
-        String otp = otpService.generateRegisterOtp(user);
-        emailService.sendResetOtpEmail(email, otp);
+
+        UserEntity user = find(email);
+
+        String otp = otpService.generateResetOtp(user);
+        emailService.sendResetOtpEmail(user.getEmail(), otp);
     }
 
     @Override
     public void resetPassword(String email, String otp, String newPassword) {
-        UserEntity user = findByEmailOrThrow(email);
-        otpService.verifyRegisterOtp(user, otp);
+
+        UserEntity user = find(email);
+
+        otpService.verifyResetOtp(user, otp);
+
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
     }
 
-    // ================= EMAIL CHANGE =================
+    // ================= EMAIL CHANGE (OTP BASED) =================
     @Override
     public void requestEmailChange(String currentEmail, String newEmail) {
 
-        UserEntity user = findByEmailOrThrow(currentEmail);
+        UserEntity user = find(currentEmail);
 
-        String token = UUID.randomUUID().toString();
+        newEmail = normalize(newEmail);
+
+        if (userRepository.existsByEmail(newEmail)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email already exists");
+        }
+
+        String otp = otpService.generateOtp();
 
         user.setPendingEmail(newEmail);
-        user.setEmailChangeToken(token);
-        user.setEmailChangeExpiry(LocalDateTime.now().plusMinutes(10));
+        user.setEmailChangeOtp(otp);
+        user.setEmailChangeExpiry(LocalDateTime.now().plusMinutes(5));
 
         userRepository.save(user);
 
-        String link = BASE_URL + "/api/v1.0/profile/verify-email-change?token=" + token;
-
-        emailService.sendVerificationEmail(newEmail, link);
+        emailService.sendVerificationOtpEmail(newEmail, otp);
     }
 
     @Override
-    public void verifyEmailChange(String token) {
+    public void verifyEmailChangeOtp(String email, String otp) {
 
-        UserEntity user = userRepository.findAll().stream()
-                .filter(u -> token.equals(u.getEmailChangeToken()))
-                .findFirst()
-                .orElseThrow(() -> new RuntimeException("Invalid token"));
+        UserEntity user = find(email);
+
+        if (user.getEmailChangeOtp() == null) {
+            throw new RuntimeException("No email change requested");
+        }
+
+        if (!user.getEmailChangeOtp().equals(otp)) {
+            throw new RuntimeException("Invalid OTP");
+        }
 
         if (user.getEmailChangeExpiry().isBefore(LocalDateTime.now())) {
-            throw new RuntimeException("Token expired");
+            throw new RuntimeException("OTP expired");
         }
 
         user.setEmail(user.getPendingEmail());
         user.setPendingEmail(null);
-        user.setEmailChangeToken(null);
+        user.setEmailChangeOtp(null);
+        user.setEmailVerified(true);
 
         userRepository.save(user);
     }
 
     @Override
-    public void resendEmailChange(String email) {
+    public void resendEmailChangeOtp(String email) {
 
-        UserEntity user = findByEmailOrThrow(email);
+        UserEntity user = find(email);
 
         if (user.getPendingEmail() == null) {
             throw new RuntimeException("No pending email change");
@@ -147,19 +164,16 @@ public class ProfileServiceImpl implements ProfileService {
         requestEmailChange(email, user.getPendingEmail());
     }
 
-    // ================= PHONE OTP =================
+    // ================= PHONE =================
     @Override
     public void sendPhoneOtp(String email, String phoneNumber) {
 
-        UserEntity user = findByEmailOrThrow(email);
-
-        String otp = String.valueOf((int)(Math.random() * 900000) + 100000);
+        UserEntity user = find(email);
 
         user.setPhoneNumber(phoneNumber);
-        user.setPhoneOtp(otp);
-        user.setPhoneOtpExpiry(LocalDateTime.now().plusMinutes(5));
-
         userRepository.save(user);
+
+        String otp = otpService.generatePhoneOtp(user);
 
         smsService.sendVerificationOtp(phoneNumber, otp);
     }
@@ -167,19 +181,11 @@ public class ProfileServiceImpl implements ProfileService {
     @Override
     public void verifyPhoneOtp(String email, String otp) {
 
-        UserEntity user = findByEmailOrThrow(email);
+        UserEntity user = find(email);
 
-        if (!otp.equals(user.getPhoneOtp())) {
-            throw new RuntimeException("Invalid OTP");
-        }
-
-        if (user.getPhoneOtpExpiry().isBefore(LocalDateTime.now())) {
-            throw new RuntimeException("OTP expired");
-        }
+        otpService.verifyPhoneOtp(user, otp);
 
         user.setPhoneVerified(true);
-        user.setPhoneOtp(null);
-
         userRepository.save(user);
     }
 
@@ -187,7 +193,7 @@ public class ProfileServiceImpl implements ProfileService {
     @Override
     public String getKycRejectionReason(String email) {
 
-        UserEntity user = findByEmailOrThrow(email);
+        UserEntity user = find(email);
 
         return kycRepository.findByUser(user)
                 .map(KycEntity::getRejectionReason)
@@ -196,25 +202,29 @@ public class ProfileServiceImpl implements ProfileService {
 
     // ================= LAST LOGIN =================
     @Override
-    public Object getLastLogin(String email) {
-        return findByEmailOrThrow(email).getUpdatedAt();
+    public String getLastLogin(String email) {
+        return find(email).getUpdatedAt().toString();
     }
 
     // ================= PROFILE =================
     @Override
     public ProfileResponse getProfile(String email) {
-        return convertToProfileResponse(findByEmailOrThrow(email));
+        return convert(find(email));
     }
 
     // ================= HELPERS =================
-    private UserEntity findByEmailOrThrow(String email) {
-        return userRepository.findByEmail(email.toLowerCase().trim())
+    private UserEntity find(String email) {
+        return userRepository.findByEmail(normalize(email))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
     }
 
-    private ProfileResponse convertToProfileResponse(UserEntity user) {
+    private String normalize(String email) {
+        return email == null ? "" : email.trim().toLowerCase();
+    }
 
-        Optional<KycEntity> kycOpt = kycRepository.findByUser(user);
+    private ProfileResponse convert(UserEntity user) {
+
+        Optional<KycEntity> kyc = kycRepository.findByUser(user);
 
         return ProfileResponse.builder()
                 .userId(user.getUserId())
@@ -222,7 +232,7 @@ public class ProfileServiceImpl implements ProfileService {
                 .email(user.getEmail())
                 .phoneNumber(user.getPhoneNumber())
                 .isAccountVerified(Boolean.TRUE.equals(user.getEmailVerified()))
-                .isKycVerified(kycOpt.map(k -> "VERIFIED".equalsIgnoreCase(k.getStatus())).orElse(false))
+                .isKycVerified(kyc.map(k -> "VERIFIED".equalsIgnoreCase(k.getStatus())).orElse(false))
                 .referralCode(user.getReferralCode())
                 .build();
     }
@@ -230,17 +240,17 @@ public class ProfileServiceImpl implements ProfileService {
     // ================= REQUIRED =================
     @Override
     public String getLoggedInUserId(String email) {
-        return findByEmailOrThrow(email).getUserId();
+        return find(email).getUserId();
     }
 
     @Override
     public boolean existsByEmail(String email) {
-        return userRepository.existsByEmail(email.toLowerCase().trim());
+        return userRepository.existsByEmail(normalize(email));
     }
 
     @Override
     public UserEntity findByEmail(String email) {
-        return findByEmailOrThrow(email);
+        return find(email);
     }
 
     @Override
