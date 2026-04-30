@@ -22,75 +22,94 @@ public class OtpServiceImpl implements OtpService {
 
     private final OtpRepository otpRepository;
 
-    private static final int LOGIN_EXPIRY = 5;     // minutes
-    private static final int REGISTER_EXPIRY = 5;  // minutes
+    private static final int EXPIRY_MINUTES = 5;
 
-    // ================= GENERATE OTP =================
+    // ================= GENERATE =================
     @Override
     public String generateOtp() {
         return String.valueOf(ThreadLocalRandom.current().nextInt(100000, 999999));
     }
 
-    // ================= LOGIN OTP =================
+    // ================= LOGIN =================
     @Override
     @Transactional
     public String generateLoginOtp(UserEntity user) {
-
-        String email = normalizeEmail(user.getEmail());
-        String otp = generateOtp();
-
-        invalidateOldOtp(email, "LOGIN");
-
-        OtpVerification entity = buildOtpEntity(user, email, otp, "LOGIN", LOGIN_EXPIRY);
-
-        otpRepository.save(entity);
-
-        log.info("LOGIN OTP generated for {}", email);
-
-        return otp;
+        return generate(user, "LOGIN");
     }
 
-    // ================= VERIFY LOGIN OTP =================
     @Override
-    @Transactional
     public void verifyLoginOtp(UserEntity user, String otp) {
-        validateOtp(user, otp, "LOGIN");
+        validate(user, otp, "LOGIN");
     }
 
-    // ================= REGISTER OTP =================
+    // ================= REGISTER =================
     @Override
     @Transactional
     public String generateRegisterOtp(UserEntity user) {
+        return generate(user, "REGISTER");
+    }
 
-        String email = normalizeEmail(user.getEmail());
+    @Override
+    public void verifyRegisterOtp(UserEntity user, String otp) {
+        validate(user, otp, "REGISTER");
+    }
+
+    // ================= RESET =================
+    @Override
+    @Transactional
+    public String generateResetOtp(UserEntity user) {
+        return generate(user, "RESET");
+    }
+
+    @Override
+    public void verifyResetOtp(UserEntity user, String otp) {
+        validate(user, otp, "RESET");
+    }
+
+    // ================= PHONE =================
+    @Override
+    @Transactional
+    public String generatePhoneOtp(UserEntity user) {
+        return generate(user, "PHONE");
+    }
+
+    @Override
+    public void verifyPhoneOtp(UserEntity user, String otp) {
+        validate(user, otp, "PHONE");
+    }
+
+    // ================= COMMON GENERATE =================
+    private String generate(UserEntity user, String purpose) {
+
+        String email = normalize(user.getEmail());
         String otp = generateOtp();
 
-        invalidateOldOtp(email, "REGISTER");
+        invalidateOldOtp(email, purpose);
 
-        OtpVerification entity = buildOtpEntity(user, email, otp, "REGISTER", REGISTER_EXPIRY);
+        OtpVerification entity = new OtpVerification();
+        entity.setUserId(user.getId());
+        entity.setEmail(email);
+        entity.setPhoneNumber(user.getPhoneNumber());
+        entity.setOtp(otp);
+        entity.setPurpose(purpose);
+        entity.setExpiryTime(LocalDateTime.now().plusMinutes(EXPIRY_MINUTES));
+        entity.setIsUsed(false);
 
         otpRepository.save(entity);
 
-        log.info("REGISTER OTP generated for {}", email);
+        log.info("{} OTP generated for {}", purpose, email);
 
         return otp;
     }
 
-    // ================= VERIFY REGISTER OTP =================
-    @Override
-    @Transactional
-    public void verifyRegisterOtp(UserEntity user, String otp) {
-        validateOtp(user, otp, "REGISTER");
-    }
-
-    // ================= COMMON VALIDATION =================
-    private void validateOtp(UserEntity user, String otp, String purpose) {
+    // ================= COMMON VERIFY =================
+    private void validate(UserEntity user, String otp, String purpose) {
 
         if (otp == null || otp.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP required");
         }
 
-        String email = normalizeEmail(user.getEmail());
+        String email = normalize(user.getEmail());
 
         OtpVerification entity = otpRepository
                 .findTopByEmailAndPurposeOrderByCreatedAtDesc(email, purpose)
@@ -105,8 +124,7 @@ public class OtpServiceImpl implements OtpService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid OTP");
         }
 
-        if (entity.getExpiryTime() == null ||
-                entity.getExpiryTime().isBefore(LocalDateTime.now())) {
+        if (entity.getExpiryTime().isBefore(LocalDateTime.now())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP expired");
         }
 
@@ -116,32 +134,16 @@ public class OtpServiceImpl implements OtpService {
         log.info("{} OTP verified for {}", purpose, email);
     }
 
-    // ================= HELPER METHODS =================
-
-    private String normalizeEmail(String email) {
-        return email == null ? "" : email.trim().toLowerCase();
-    }
-
+    // ================= HELPERS =================
     private void invalidateOldOtp(String email, String purpose) {
         otpRepository.findTopByEmailAndPurposeOrderByCreatedAtDesc(email, purpose)
-                .ifPresent(oldOtp -> {
-                    oldOtp.setIsUsed(true);
-                    otpRepository.save(oldOtp);
+                .ifPresent(old -> {
+                    old.setIsUsed(true);
+                    otpRepository.save(old);
                 });
     }
 
-    private OtpVerification buildOtpEntity(UserEntity user, String email, String otp,
-                                           String purpose, int expiryMinutes) {
-
-        OtpVerification entity = new OtpVerification();
-        entity.setUserId(user.getId());
-        entity.setEmail(email);
-        entity.setPhoneNumber(user.getPhoneNumber());
-        entity.setOtp(otp);
-        entity.setPurpose(purpose);
-        entity.setExpiryTime(LocalDateTime.now().plusMinutes(expiryMinutes));
-        entity.setIsUsed(false);
-
-        return entity;
+    private String normalize(String email) {
+        return email == null ? "" : email.trim().toLowerCase();
     }
 }

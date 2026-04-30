@@ -62,7 +62,7 @@ public class SecurityConfig {
                 // ================= AUTHORIZATION =================
                 .authorizeHttpRequests(auth -> auth
 
-                        // ✅ Preflight (CORS fix)
+                        // ✅ Preflight (CORS)
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
                         // ================= PUBLIC =================
@@ -86,6 +86,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1.0/payment/verify").permitAll()
 
                         // ================= ADMIN =================
+                        // ⚠️ Ensure DB stores ROLE_ADMIN (with prefix)
                         .requestMatchers(
                                 "/api/v1.0/admin/**",
                                 "/api/v1.0/kyc/verify/**",
@@ -105,10 +106,8 @@ public class SecurityConfig {
                                 "/api/v1.0/kyc/**"
                         ).authenticated()
 
-                        // ================= GLOBAL FALLBACK =================
+                        // ================= FALLBACK =================
                         .requestMatchers("/api/v1.0/**").authenticated()
-
-                        .anyRequest().authenticated()
                 )
 
                 // ================= JWT FILTER =================
@@ -133,7 +132,11 @@ public class SecurityConfig {
                 "GET", "POST", "PUT", "DELETE", "OPTIONS"
         ));
 
-        config.setAllowedHeaders(List.of("*"));
+        // 🔥 FIXED (avoid wildcard security issue)
+        config.setAllowedHeaders(List.of(
+                "Authorization",
+                "Content-Type"
+        ));
 
         config.setAllowCredentials(true);
 

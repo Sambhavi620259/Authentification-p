@@ -1,6 +1,9 @@
 package in.bawvpl.Authify.filter;
 
+import in.bawvpl.Authify.entity.UserEntity;
+import in.bawvpl.Authify.repository.UserRepository;
 import in.bawvpl.Authify.util.JwtUtil;
+
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -27,6 +30,7 @@ public class JwtRequestFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
     private final UserDetailsService userDetailsService;
+    private final UserRepository userRepository;
 
     // ================= SKIP FILTER =================
     @Override
@@ -45,7 +49,9 @@ public class JwtRequestFilter extends OncePerRequestFilter {
                 || path.startsWith("/api/v1.0/register")
                 || path.startsWith("/api/v1.0/login/verify-otp")
                 || path.startsWith("/api/v1.0/verify")
-                || path.startsWith("/api/v1.0/payment/verify") // 🔥 IMPORTANT
+                || path.startsWith("/api/v1.0/forgot-password")
+                || path.startsWith("/api/v1.0/reset-password")
+                || path.startsWith("/api/v1.0/payment/verify")
                 || path.startsWith("/uploads/")
                 || path.startsWith("/swagger-ui/")
                 || path.startsWith("/v3/api-docs/")
@@ -95,7 +101,28 @@ public class JwtRequestFilter extends OncePerRequestFilter {
                 UserDetails userDetails =
                         userDetailsService.loadUserByUsername(username);
 
+                // 🔥 FETCH USER FROM DB (FOR TOKEN VERSION)
+                UserEntity user = userRepository.findByEmailIgnoreCase(username)
+                        .orElse(null);
+
+                if (user == null) {
+                    log.warn("❌ User not found in DB: {}", username);
+                    filterChain.doFilter(request, response);
+                    return;
+                }
+
+                // ✅ Validate JWT
                 if (jwtUtil.validateToken(jwt, userDetails.getUsername())) {
+
+                    // 🔥 TOKEN VERSION CHECK (LOGOUT ALL SUPPORT)
+                    Integer tokenVersionInJwt = jwtUtil.extractTokenVersion(jwt);
+                    Integer currentVersion = user.getTokenVersion() == null ? 0 : user.getTokenVersion();
+
+                    if (!currentVersion.equals(tokenVersionInJwt)) {
+                        log.warn("❌ Token version mismatch (logout-all triggered)");
+                        filterChain.doFilter(request, response);
+                        return;
+                    }
 
                     UsernamePasswordAuthenticationToken authentication =
                             new UsernamePasswordAuthenticationToken(

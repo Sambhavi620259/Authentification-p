@@ -12,7 +12,8 @@ import java.util.UUID;
         name = "users",
         indexes = {
                 @Index(name = "idx_user_email", columnList = "email"),
-                @Index(name = "idx_user_userid", columnList = "user_id")
+                @Index(name = "idx_user_userid", columnList = "user_id"),
+                @Index(name = "idx_user_phone", columnList = "phone_number")
         }
 )
 @Getter
@@ -43,7 +44,7 @@ public class UserEntity {
     @Column(nullable = false, unique = true)
     private String email;
 
-    @Column(name = "phone_number", unique = true)
+    @Column(name = "phone_number")
     private String phoneNumber;
 
     @Column(nullable = false)
@@ -66,6 +67,27 @@ public class UserEntity {
     @Column(name = "verification_token")
     private String verificationToken;
 
+    // ================= EMAIL CHANGE FLOW =================
+    @Column(name = "pending_email")
+    private String pendingEmail;
+
+    @Column(name = "email_change_token")
+    private String emailChangeToken;
+
+    @Column(name = "email_change_expiry")
+    private LocalDateTime emailChangeExpiry;
+
+    // ================= PHONE VERIFICATION =================
+    @Builder.Default
+    @Column(name = "phone_verified", nullable = false)
+    private Boolean phoneVerified = false;
+
+    @Column(name = "phone_otp", length = 10)
+    private String phoneOtp;
+
+    @Column(name = "phone_otp_expiry")
+    private LocalDateTime phoneOtpExpiry;
+
     // ================= KYC =================
     @Builder.Default
     @Column(name = "is_kyc_verified", nullable = false)
@@ -85,6 +107,26 @@ public class UserEntity {
     @Column(name = "photo_url")
     private String photoUrl;
 
+    // ================= TOKEN VERSION =================
+    @Builder.Default
+    @Column(name = "token_version", nullable = false)
+    private Integer tokenVersion = 0;
+
+    // ================= 2FA =================
+    @Builder.Default
+    @Column(name = "two_factor_enabled", nullable = false)
+    private Boolean twoFactorEnabled = false;
+
+    @Column(name = "two_factor_secret", length = 100)
+    private String twoFactorSecret;
+
+    // ================= RESET PASSWORD =================
+    @Column(name = "reset_otp", length = 10)
+    private String resetOtp;
+
+    @Column(name = "reset_otp_expiry")
+    private Instant resetOtpExpiry;
+
     // ================= TIMESTAMPS =================
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -98,41 +140,35 @@ public class UserEntity {
 
         LocalDateTime now = LocalDateTime.now();
 
-        // ✅ Generate userId if missing
         if (this.userId == null || this.userId.isBlank()) {
             this.userId = generateUserId();
         }
 
-        // ✅ timestamps
         if (this.createdAt == null) {
             this.createdAt = now;
         }
 
         this.updatedAt = now;
 
-        // ✅ Normalize email
         if (this.email != null) {
             this.email = this.email.toLowerCase().trim();
         }
 
-        // ✅ Defaults
-        if (this.userStatus == null) {
-            this.userStatus = "ACTIVE";
+        if (this.phoneNumber != null) {
+            this.phoneNumber = this.phoneNumber.trim();
         }
 
-        if (this.emailVerified == null) {
-            this.emailVerified = false;
-        }
-
-        if (this.isKycVerified == null) {
-            this.isKycVerified = false;
-        }
+        if (this.userStatus == null) this.userStatus = "ACTIVE";
+        if (this.emailVerified == null) this.emailVerified = false;
+        if (this.phoneVerified == null) this.phoneVerified = false;
+        if (this.isKycVerified == null) this.isKycVerified = false;
+        if (this.tokenVersion == null) this.tokenVersion = 0;
+        if (this.twoFactorEnabled == null) this.twoFactorEnabled = false;
 
         if (this.role == null || this.role.isBlank()) {
             this.role = "ROLE_USER";
         }
 
-        // ✅ Referral Code
         if (this.referralCode == null || this.referralCode.isBlank()) {
             this.referralCode = generateReferralCode();
         }
@@ -146,21 +182,18 @@ public class UserEntity {
         if (this.email != null) {
             this.email = this.email.toLowerCase().trim();
         }
+
+        if (this.phoneNumber != null) {
+            this.phoneNumber = this.phoneNumber.trim();
+        }
     }
 
-    @Column(name = "reset_otp")
-    private String resetOtp;
-
-    @Column(name = "reset_otp_expiry")
-    private Instant resetOtpExpiry;
-
     // ================= HELPERS =================
-
     private String generateUserId() {
-        return "USR" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        return "USR-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
     }
 
     private String generateReferralCode() {
-        return "REF" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        return "REF-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
     }
 }

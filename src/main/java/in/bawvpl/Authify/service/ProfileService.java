@@ -31,4 +31,26 @@ public interface ProfileService {
     void sendResetOtp(String email);
 
     void resetPassword(String email, String otp, String newPassword);
+
+    // ================= EMAIL CHANGE =================
+
+    void requestEmailChange(String currentEmail, String newEmail);
+
+    void verifyEmailChange(String token);
+
+    void resendEmailChange(String email);
+
+    // ================= PHONE CHANGE =================
+
+    void sendPhoneOtp(String email, String phoneNumber);
+
+    void verifyPhoneOtp(String email, String otp);
+
+    // ================= KYC =================
+
+    String getKycRejectionReason(String email);
+
+    // ================= LAST LOGIN =================
+
+    Object getLastLogin(String email);
 }

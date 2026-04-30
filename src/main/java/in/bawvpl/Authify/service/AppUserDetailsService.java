@@ -39,7 +39,9 @@ public class AppUserDetailsService implements UserDetailsService {
     public UserDetails loadUserByUsername(String username)
             throws UsernameNotFoundException {
 
-        UserEntity user = userRepository.findByEmail(username.toLowerCase())
+        String email = username.toLowerCase().trim();
+
+        UserEntity user = userRepository.findByEmail(email)
                 .orElseThrow(() ->
                         new UsernameNotFoundException("User not found"));
 
@@ -93,13 +95,15 @@ public class AppUserDetailsService implements UserDetailsService {
         // ✅ verify OTP
         otpService.verifyLoginOtp(user, otp);
 
-        // ✅ generate JWT token
-        String token = jwtUtil.generateAccessToken(user.getEmail());
+        // 🔥 FIXED (tokenVersion added)
+        String token = jwtUtil.generateAccessToken(
+                user.getEmail(),
+                user.getTokenVersion()
+        );
 
-        // ✅ RETURN CORRECT STRUCTURE
         return AuthResponse.builder()
-                .token(token)                 // 🔥 FIX (was accessToken)
-                .userId(user.getUserId())     // optional but useful
+                .token(token)
+                .userId(user.getUserId())
                 .build();
     }
 

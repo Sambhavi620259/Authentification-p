@@ -44,6 +44,10 @@ public class KycEntity {
     @Column(name = "completed", nullable = false)
     private Boolean completed = false;
 
+    // ================= REJECTION =================
+    @Column(name = "rejection_reason", length = 255)
+    private String rejectionReason;
+
     // ================= TIMESTAMPS =================
     @Column(name = "uploaded_at", nullable = false, updatable = false)
     private Instant uploadedAt;
@@ -54,7 +58,7 @@ public class KycEntity {
     // ================= RELATION =================
     @OneToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false, unique = true)
-    @JsonIgnore // ✅ VERY IMPORTANT (fixes Hibernate proxy error)
+    @JsonIgnore
     private UserEntity user;
 
     // ================= AUTO =================

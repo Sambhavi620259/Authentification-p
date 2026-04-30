@@ -5,6 +5,7 @@ import in.bawvpl.Authify.entity.UserEntity;
 import in.bawvpl.Authify.entity.KycEntity;
 import in.bawvpl.Authify.repository.UserRepository;
 import in.bawvpl.Authify.repository.KycRepository;
+import in.bawvpl.Authify.service.ProfileService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +29,7 @@ public class ProfileController {
 
     private final UserRepository userRepository;
     private final KycRepository kycRepository;
+    private final ProfileService profileService;
 
     private static final String BASE_URL = "http://43.205.116.38:8080";
 
@@ -46,6 +48,7 @@ public class ProfileController {
         String documentNumber = null;
         String kycStatus = null;
         String filePath = null;
+        String rejectionReason = null;
         boolean isKycVerified = false;
 
         if (kycOpt.isPresent()) {
@@ -55,7 +58,9 @@ public class ProfileController {
             documentNumber = kyc.getDocumentNumber();
             kycStatus = kyc.getStatus();
             filePath = kyc.getFilePath();
-            isKycVerified = "VERIFIED".equalsIgnoreCase(kyc.getStatus());
+            rejectionReason = kyc.getRejectionReason();
+
+            isKycVerified = "VERIFIED".equalsIgnoreCase(kycStatus);
         }
 
         String photoUrl = null;
@@ -78,25 +83,18 @@ public class ProfileController {
                 .photoUrl(photoUrl)
                 .build();
 
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(Map.of(
+                "profile", response,
+                "kycRejectionReason", rejectionReason
+        ));
     }
 
-    // ================= UPDATE PROFILE (🔥 FIXED) =================
+    // ================= UPDATE PROFILE =================
     @PutMapping
     public ResponseEntity<?> updateProfile(
             Authentication auth,
-            @RequestBody(required = false) Map<String, String> body
+            @RequestBody Map<String, String> body
     ) {
-
-        // ✅ AUTH CHECK
-        if (auth == null || auth.getName() == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
-        }
-
-        // ✅ BODY CHECK (fixes your error)
-        if (body == null || body.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Request body required");
-        }
 
         String email = auth.getName().toLowerCase().trim();
 
@@ -105,10 +103,6 @@ public class ProfileController {
 
         if (body.containsKey("name")) {
             user.setEntityName(body.get("name"));
-        }
-
-        if (body.containsKey("phoneNumber")) {
-            user.setPhoneNumber(body.get("phoneNumber"));
         }
 
         userRepository.save(user);
@@ -130,45 +124,82 @@ public class ProfileController {
                     .body(Map.of("message", "File is empty"));
         }
 
-        String contentType = file.getContentType();
-        if (contentType == null ||
-                !(contentType.equals("image/jpeg") ||
-                        contentType.equals("image/png") ||
-                        contentType.equals("image/jpg"))) {
-
+        if (file.getSize() > 1 * 1024 * 1024) {
             return ResponseEntity.badRequest()
-                    .body(Map.of("message", "Only JPG/PNG allowed"));
+                    .body(Map.of("message", "File size must be < 1MB"));
         }
 
         try {
             UserEntity user = userRepository.findByEmail(email)
                     .orElseThrow(() -> new RuntimeException("User not found"));
 
-            String fileName = System.currentTimeMillis() + "_" +
-                    file.getOriginalFilename().replaceAll("\\s+", "_");
+            String fileName = System.currentTimeMillis() + "_" + file.getOriginalFilename();
 
-            Path uploadPath = Paths.get(System.getProperty("user.dir"), "uploads");
+            Path path = Paths.get("uploads");
+            if (!Files.exists(path)) Files.createDirectories(path);
 
-            if (!Files.exists(uploadPath)) {
-                Files.createDirectories(uploadPath);
-            }
-
-            Path filePath = uploadPath.resolve(fileName);
-
-            Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
+            Files.copy(file.getInputStream(), path.resolve(fileName), StandardCopyOption.REPLACE_EXISTING);
 
             user.setPhotoUrl(fileName);
             userRepository.save(user);
 
             return ResponseEntity.ok(Map.of(
-                    "message", "Photo uploaded successfully",
                     "photoUrl", BASE_URL + "/uploads/" + fileName
             ));
 
         } catch (Exception e) {
-            log.error("Upload failed: {}", e.getMessage());
-            return ResponseEntity.status(500)
-                    .body(Map.of("message", "Upload failed"));
+            return ResponseEntity.status(500).body(Map.of("message", "Upload failed"));
         }
+    }
+
+    // ================= CHANGE EMAIL =================
+    @PostMapping("/change-email")
+    public ResponseEntity<?> changeEmail(Authentication auth,
+                                         @RequestBody Map<String, String> req) {
+
+        profileService.requestEmailChange(auth.getName(), req.get("newEmail"));
+        return ResponseEntity.ok(Map.of("message", "Verification email sent"));
+    }
+
+    @GetMapping("/verify-email-change")
+    public ResponseEntity<?> verifyEmail(@RequestParam String token) {
+
+        profileService.verifyEmailChange(token);
+        return ResponseEntity.ok(Map.of("message", "Email updated"));
+    }
+
+    // ================= PHONE OTP =================
+    @PostMapping("/change-phone")
+    public ResponseEntity<?> changePhone(Authentication auth,
+                                         @RequestBody Map<String,String> req) {
+
+        profileService.sendPhoneOtp(auth.getName(), req.get("phoneNumber"));
+        return ResponseEntity.ok(Map.of("message", "OTP sent"));
+    }
+
+    @PostMapping("/verify-phone")
+    public ResponseEntity<?> verifyPhone(Authentication auth,
+                                         @RequestBody Map<String,String> req) {
+
+        profileService.verifyPhoneOtp(auth.getName(), req.get("otp"));
+        return ResponseEntity.ok(Map.of("message", "Phone verified"));
+    }
+
+    // ================= LAST LOGIN =================
+    @GetMapping("/last-login")
+    public ResponseEntity<?> lastLogin(Authentication auth) {
+
+        return ResponseEntity.ok(Map.of(
+                "lastLogin", profileService.getLastLogin(auth.getName())
+        ));
+    }
+
+    // ================= KYC REJECTION =================
+    @GetMapping("/kyc-reason")
+    public ResponseEntity<?> kycReason(Authentication auth) {
+
+        return ResponseEntity.ok(Map.of(
+                "reason", profileService.getKycRejectionReason(auth.getName())
+        ));
     }
 }

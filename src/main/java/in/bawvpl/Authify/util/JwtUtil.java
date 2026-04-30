@@ -13,6 +13,8 @@ import jakarta.annotation.PostConstruct;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.function.Function;
 
 @Component
@@ -30,16 +32,22 @@ public class JwtUtil {
     // ================= INIT =================
     @PostConstruct
     public void init() {
+
         if (secret == null || secret.length() < 32) {
             throw new RuntimeException("JWT secret must be at least 32 characters long");
         }
+
         this.signingKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 
     // ================= GENERATE TOKEN =================
-    public String generateAccessToken(String username) {
+    public String generateAccessToken(String username, Integer tokenVersion) {
+
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("tokenVersion", tokenVersion == null ? 0 : tokenVersion);
 
         return Jwts.builder()
+                .setClaims(claims)
                 .setSubject(username)
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + expiration))
@@ -47,9 +55,9 @@ public class JwtUtil {
                 .compact();
     }
 
-    // ✅ Alias
+    // ✅ Backward compatibility
     public String generateToken(String username) {
-        return generateAccessToken(username);
+        return generateAccessToken(username, 0);
     }
 
     // ================= EXTRACT USERNAME =================
@@ -57,10 +65,22 @@ public class JwtUtil {
         return extractClaim(token, Claims::getSubject);
     }
 
+    // ================= EXTRACT TOKEN VERSION =================
+    public Integer extractTokenVersion(String token) {
+
+        try {
+            Claims claims = extractAllClaims(token);
+            return claims.get("tokenVersion", Integer.class);
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
     // ================= VALIDATE TOKEN =================
     public boolean validateToken(String token, String username) {
 
         try {
+
             if (token == null || token.isBlank()) return false;
 
             String clean = cleanToken(token);
@@ -80,17 +100,20 @@ public class JwtUtil {
 
     // ================= EXTRACT CLAIM =================
     public <T> T extractClaim(String token, Function<Claims, T> resolver) {
-        final Claims claims = extractAllClaims(cleanToken(token));
+
+        final Claims claims = extractAllClaims(token);
         return resolver.apply(claims);
     }
 
     // ================= CHECK EXPIRY =================
     public boolean isTokenExpired(String token) {
+
         return extractClaim(token, Claims::getExpiration).before(new Date());
     }
 
     // ================= CLEAN TOKEN =================
     private String cleanToken(String token) {
+
         if (token != null && token.startsWith("Bearer ")) {
             return token.substring(7);
         }
